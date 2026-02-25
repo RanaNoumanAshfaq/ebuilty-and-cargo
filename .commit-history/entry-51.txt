@@ -1,0 +1,15 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Commit Number: 51 of 1002
+Day of Week:   Wednesday
+Date & Time:   2026-02-25 21:31:06
+Module Scope:  AUTH - Auth, Security & Compliance
+Commit Title:  auth: [2026-02-25] Enforce password hashing with bcryptjs 10 salt rounds before storage
+
+CHANGES ON THIS DATE (Wednesday, 2026-02-25):
+• Enforce password hashing with bcryptjs 10 salt rounds before storage
+• Component: src/auth / server/modules/auth
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
