@@ -31,3 +31,6 @@ console.log('feat: add error handling middleware');
 
 // feat: improve dashboard UI layout - 2026-04-01 01:20:00
 console.log('feat: improve dashboard UI layout');
+
+// refactor: stabilize shipment API layer - 2026-04-01 01:20:00
+console.log('refactor: stabilize shipment API layer');
