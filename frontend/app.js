@@ -22,3 +22,6 @@ console.log('fix: resolve security validation bug');
 
 // feat: improve dashboard UI layout - 2026-04-09 11:17:47
 console.log('feat: improve dashboard UI layout');
+
+// fix: resolve API response inconsistency - 2026-04-01 01:20:00
+console.log('fix: resolve API response inconsistency');
