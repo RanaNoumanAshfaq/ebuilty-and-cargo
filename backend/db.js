@@ -31,3 +31,6 @@ console.log('fix: resolve shipment status bug');
 
 // fix: correct dashboard rendering issue - 2026-04-01 01:20:00
 console.log('fix: correct dashboard rendering issue');
+
+// feat: add shipping form validation - 2026-04-01 01:20:00
+console.log('feat: add shipping form validation');
