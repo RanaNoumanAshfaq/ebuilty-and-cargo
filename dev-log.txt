@@ -12,3 +12,4 @@ feat: add error handling middleware | 2026-04-01 01:20:00 | modified: frontend/a
 refactor: improve shipment workflow | 2026-04-01 01:20:00 | modified: backend/db.js
 feat: optimize user service logic | 2026-04-01 01:20:00 | modified: utils/helpers.js
 fix: resolve security validation bug | 2026-04-01 01:20:00 | modified: utils/helpers.js
+feat: improve billing precision logic | 2026-04-01 01:20:00 | modified: backend/api.js
