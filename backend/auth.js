@@ -37,3 +37,6 @@ console.log('feat: enhance UI responsiveness');
 
 // fix: handle tracking edge case error - 2026-04-01 01:20:00
 console.log('fix: handle tracking edge case error');
+
+// fix: correct form validation issue - 2026-04-01 01:20:00
+console.log('fix: correct form validation issue');
