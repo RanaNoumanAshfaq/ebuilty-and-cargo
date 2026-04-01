@@ -25,3 +25,6 @@ console.log('feat: improve dashboard UI layout');
 
 // fix: resolve API response inconsistency - 2026-04-01 01:20:00
 console.log('fix: resolve API response inconsistency');
+
+// feat: add error handling middleware - 2026-04-01 01:20:00
+console.log('feat: add error handling middleware');
