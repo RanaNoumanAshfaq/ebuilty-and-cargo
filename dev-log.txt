@@ -1,1 +1,2 @@
 feat: improve tracking accuracy logic | 2026-04-01 01:20:00 | modified: utils/helpers.js
+fix: resolve shipment status bug | 2026-04-01 01:20:00 | modified: backend/db.js

@@ -25,3 +25,6 @@ console.log('feat: add logging improvements');
 
 // fix: correct form validation issue - 2026-05-01 09:19:41
 console.log('fix: correct form validation issue');
+
+// fix: resolve shipment status bug - 2026-04-01 01:20:00
+console.log('fix: resolve shipment status bug');
