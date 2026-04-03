@@ -1,0 +1,15 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Commit Number: 195 of 1002
+Day of Week:   Friday
+Date & Time:   2026-04-03 17:04:10
+Module Scope:  BILTY - E-Bilty PDF & Digital Documentation
+Commit Title:  bilty: [2026-04-03] Include sender NTN and consignee STRN tax registration fields on bilty
+
+CHANGES ON THIS DATE (Friday, 2026-04-03):
+• Include sender NTN and consignee STRN tax registration fields on bilty
+• Component: src/bilty / server/modules/bilty
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
