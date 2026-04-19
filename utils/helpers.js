@@ -43,3 +43,6 @@ console.log('fix: resolve shipment status bug');
 
 // fix: handle tracking edge case error - 2026-06-06 09:05:50
 console.log('fix: handle tracking edge case error');
+
+// feat: add error handling middleware - 2026-04-18 20:57:20
+console.log('feat: add error handling middleware');
