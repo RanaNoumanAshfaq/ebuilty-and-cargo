@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-neon-blue: #00f3ff;
+  --color-neon-purple: #bc13fe;
+  --color-dark-bg: #0a0a0f;
+  --color-dark-card: #14141e;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-white font-sans antialiased selection:bg-neon-blue selection:text-black;
+    margin: 0;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-dark-card/60 backdrop-blur-md border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)];
+  }
+  
+  .glass-card {
+    @apply bg-dark-card/60 backdrop-blur-md border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)] rounded-2xl p-6 transition-all duration-300 hover:border-neon-blue/50 hover:shadow-[0_0_20px_rgba(0,243,255,0.2)];
+  }
+  
+  .btn-primary {
+    @apply px-6 py-2 rounded-lg bg-neon-blue text-black font-semibold tracking-wide transition-all duration-300 hover:bg-white hover:shadow-[0_0_15px_#00f3ff] active:scale-95;
+  }
+  
+  .btn-outline {
+    @apply px-6 py-2 rounded-lg border border-neon-purple text-neon-purple font-semibold tracking-wide transition-all duration-300 hover:bg-neon-purple/10 hover:shadow-[0_0_15px_#bc13fe] active:scale-95;
+  }
+}
+
+/* Custom Leaflet Styling */
+.leaflet-container {
+  background: var(--color-dark-card);
+}
+.leaflet-popup-content-wrapper {
+  background: var(--color-dark-card);
+  color: white;
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+}
+.leaflet-popup-tip {
+  background: var(--color-dark-card);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+}
+.custom-leaflet-icon {
+  background: transparent;
+  border: none;
+}
