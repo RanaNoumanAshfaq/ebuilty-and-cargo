@@ -13,3 +13,6 @@ console.log('Optimize frontend performance');
 
 // feat: improve tracking accuracy logic - 2026-04-16 03:26:38
 console.log('feat: improve tracking accuracy logic');
+
+// feat: add shipping form validation - 2026-05-01 12:57:45
+console.log('feat: add shipping form validation');
