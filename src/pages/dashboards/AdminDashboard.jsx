@@ -1,77 +1,71 @@
 import { useAuth } from '../../contexts/AuthContext';
-import { Users, FileText, Activity, AlertTriangle, ExternalLink, Check, X, Shield, Package, Trash2, ShieldAlert, CheckCircle } from 'lucide-react';
+import { Users, FileText, Activity, AlertTriangle, ExternalLink, Check, X, Shield, Package, Trash2, ShieldAlert, CheckCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { db, addNotification } from '../../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { adminAPI, logisticsAPI, socket } from '../../api';
 
 export default function AdminDashboard() {
   const { userData } = useAuth();
-  const [activeTab, setActiveTab] = useState('verifications'); // 'verifications', 'users', 'records', 'complaints'
+  const [activeTab, setActiveTab] = useState('verifications');
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
   const [complaints, setComplaints] = useState([]);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [activeShipments, setActiveShipments] = useState(0);
+  const [stats, setStats] = useState({ users: 0, activeShipments: 0, trucks: 0, complaints: 0 });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // 1. Pending Verifications
-    const q1 = query(collection(db, 'users'), where('status', '==', 'pending_verification'));
-    const unsub1 = onSnapshot(q1, snap => {
-      const docs = [];
-      snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
-      setPendingUsers(docs);
+  const fetchData = async () => {
+    try {
+      const [statsRes, usersRes, bookingsRes, complaintsRes] = await Promise.all([
+        adminAPI.getStats(),
+        adminAPI.getUsers(),
+        logisticsAPI.getBookings(),
+        logisticsAPI.getComplaints()
+      ]);
+
+      setStats(statsRes.data);
+      setAllUsers(usersRes.data);
+      setPendingUsers(usersRes.data.filter(u => u.status === 'pending' || u.status === 'pending_verification'));
+      setAllBookings(bookingsRes.data);
+      setComplaints(complaintsRes.data);
       setLoading(false);
-    });
+    } catch (e) {
+      console.error("Error fetching admin data:", e);
+      setLoading(false);
+    }
+  };
 
-    // 2. All Users
-    const unsub2 = onSnapshot(collection(db, 'users'), snap => {
-      const docs = [];
-      snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
-      setAllUsers(docs);
-      setTotalUsers(snap.size);
-    });
+  useEffect(() => {
+    fetchData();
 
-    // 3. All Bookings
-    const unsub3 = onSnapshot(collection(db, 'bookings'), snap => {
-      const docs = [];
-      let active = 0;
-      snap.forEach(d => {
-        const data = d.data();
-        docs.push({ id: d.id, ...data });
-        if (data.status === 'Accepted') active++;
-      });
-      setAllBookings(docs);
-      setActiveShipments(active);
-    });
+    // Listen for updates
+    socket.on('booking_updated', fetchData);
+    socket.on('notification', fetchData);
 
-    // 4. Complaints
-    const unsub4 = onSnapshot(collection(db, 'complaints'), snap => {
-      const docs = [];
-      snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
-      setComplaints(docs);
-    });
-
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+    return () => {
+      socket.off('booking_updated');
+      socket.off('notification');
+    };
   }, []);
 
   const handleVerification = async (userId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { status: newStatus });
-      await addNotification(userId, `Verification status: ${newStatus}`);
+      await adminAPI.updateUserStatus(userId, newStatus);
+      fetchData(); // Refresh
     } catch (e) { console.error(e); }
   };
 
   const handleUserStatusUpdate = async (userId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { status: newStatus });
-      await addNotification(userId, `Admin updated your status to: ${newStatus}`);
+      await adminAPI.updateUserStatus(userId, newStatus);
+      fetchData();
     } catch (e) { console.error(e); }
   };
 
   const handleResolveComplaint = async (id) => {
-    try { await deleteDoc(doc(db, 'complaints', id)); } catch (e) { console.error(e); }
+    try {
+      await logisticsAPI.updateComplaint(id, { status: 'Resolved' });
+      fetchData();
+    } catch (e) { console.error(e); }
   };
 
   return (
@@ -81,7 +75,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="glass-card">
           <p className="text-gray-400 text-sm">Total Users</p>
-          <p className="text-2xl font-bold text-white">{totalUsers}</p>
+          <p className="text-2xl font-bold text-white">{stats.users}</p>
         </div>
         <div className="glass-card">
           <p className="text-gray-400 text-sm">Pending Verifications</p>
@@ -89,11 +83,11 @@ export default function AdminDashboard() {
         </div>
         <div className="glass-card">
           <p className="text-gray-400 text-sm">Active Shipments</p>
-          <p className="text-2xl font-bold text-green-400">{activeShipments}</p>
+          <p className="text-2xl font-bold text-green-400">{stats.activeShipments}</p>
         </div>
         <div className="glass-card">
           <p className="text-gray-400 text-sm">Open Complaints</p>
-          <p className="text-2xl font-bold text-red-400">{complaints.length}</p>
+          <p className="text-2xl font-bold text-red-400">{stats.complaints}</p>
         </div>
       </div>
 
@@ -113,12 +107,27 @@ export default function AdminDashboard() {
         {activeTab === 'verifications' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {pendingUsers.map(u => (
-              <div key={u.id} className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <p className="font-bold text-white">{u.name}</p>
-                <p className="text-xs text-gray-400 mb-4 capitalize">{u.role.replace('_', ' ')}</p>
-                <div className="flex gap-2">
-                  <button onClick={() => handleVerification(u.id, 'active')} className="flex-1 bg-green-500/20 text-green-400 py-1 rounded text-sm font-bold">Approve</button>
-                  <button onClick={() => handleVerification(u.id, 'rejected')} className="flex-1 bg-red-500/20 text-red-400 py-1 rounded text-sm font-bold">Reject</button>
+              <div key={u._id} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <p className="font-bold text-white">{u.name} <span className="text-xs font-normal text-orange-400">({u.status.replace('_', ' ')})</span></p>
+                <p className="text-xs text-gray-400 mb-2 capitalize">{u.role.replace('_', ' ')}</p>
+                {u.documents && u.documents.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    <p className="text-xs text-gray-400">Uploaded Documents:</p>
+                    <div className="flex gap-2">
+                      {u.documents.map((doc, i) => (
+                        <a key={i} href={doc} target="_blank" rel="noopener noreferrer" className="text-[10px] bg-neon-blue/20 text-neon-blue px-2 py-1 rounded hover:bg-neon-blue hover:text-black transition-colors border border-neon-blue/30">
+                          View Doc {i + 1}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!u.documents?.length && u.status === 'pending_verification' && (
+                  <p className="text-[10px] text-gray-500 mb-4 italic">Documents pending mock upload...</p>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => handleVerification(u._id, 'active')} className="flex-1 bg-green-500/20 text-green-400 py-1 rounded text-sm font-bold">Approve</button>
+                  <button onClick={() => handleVerification(u._id, 'rejected')} className="flex-1 bg-red-500/20 text-red-400 py-1 rounded text-sm font-bold">Reject</button>
                 </div>
               </div>
             ))}
@@ -134,12 +143,12 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {allUsers.map(u => (
-                  <tr key={u.id} className="border-b border-white/5 text-white">
+                  <tr key={u._id} className="border-b border-white/5 text-white">
                     <td className="p-3">{u.name}</td>
                     <td className="p-3 text-sm capitalize">{u.role.replace('_', ' ')}</td>
                     <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>{u.status}</span></td>
                     <td className="p-3">
-                      <button onClick={() => handleUserStatusUpdate(u.id, u.status === 'active' ? 'blocked' : 'active')} className={`text-xs font-bold ${u.status === 'active' ? 'text-red-400' : 'text-green-400'}`}>
+                      <button onClick={() => handleUserStatusUpdate(u._id, u.status === 'active' ? 'blocked' : 'active')} className={`text-xs font-bold ${u.status === 'active' ? 'text-red-400' : 'text-green-400'}`}>
                         {u.status === 'active' ? 'Block' : 'Unblock'}
                       </button>
                     </td>
@@ -153,7 +162,7 @@ export default function AdminDashboard() {
         {activeTab === 'records' && (
           <div className="space-y-3">
             {allBookings.map(b => (
-              <div key={b.id} className="p-3 rounded-lg bg-white/5 border border-white/10 flex justify-between items-center">
+              <div key={b._id} className="p-3 rounded-lg bg-white/5 border border-white/10 flex justify-between items-center">
                 <div>
                   <p className="font-bold text-white text-sm">{b.cargoTitle}</p>
                   <p className="text-[10px] text-gray-400">Truck: {b.truckPlate} | Owner: {b.truckOwnerId}</p>
@@ -170,13 +179,15 @@ export default function AdminDashboard() {
         {activeTab === 'complaints' && (
           <div className="space-y-4">
             {complaints.map(c => (
-              <div key={c.id} className="p-4 rounded-lg bg-red-500/5 border border-red-500/10">
+              <div key={c._id} className="p-4 rounded-lg bg-red-500/5 border border-red-500/10">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-bold text-white">{c.subject}</p>
                     <p className="text-xs text-gray-400">From: {c.userName} ({c.userRole})</p>
                   </div>
-                  <button onClick={() => handleResolveComplaint(c.id)} className="text-xs text-green-400 hover:underline">Resolve</button>
+                  {c.status === 'Open' && (
+                    <button onClick={() => handleResolveComplaint(c._id)} className="text-xs text-green-400 hover:underline">Resolve</button>
+                  )}
                 </div>
                 <p className="text-sm text-gray-300 mt-2">{c.description}</p>
               </div>

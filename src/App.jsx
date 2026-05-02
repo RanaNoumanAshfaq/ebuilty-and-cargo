@@ -1,8 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { User, Bell, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { db } from './firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { logisticsAPI, socket } from './api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -19,15 +18,20 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  useEffect(() => {
+  const fetchNotifications = async () => {
     if (!currentUser) return;
-    const q = query(collection(db, 'notifications'), where('userId', '==', currentUser.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = [];
-      snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
-      setNotifications(docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    try {
+      const res = await logisticsAPI.getNotifications();
+      setNotifications(res.data);
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    socket.on('notification', (n) => {
+      setNotifications(prev => [n, ...prev]);
     });
-    return () => unsubscribe();
+    return () => socket.off('notification');
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -41,7 +45,8 @@ const Navbar = () => {
 
   const clearNotification = async (id) => {
     try {
-      await deleteDoc(doc(db, 'notifications', id));
+      await logisticsAPI.deleteNotification(id);
+      setNotifications(prev => prev.filter(n => n._id !== id));
     } catch (e) {
       console.error(e);
     }
@@ -79,12 +84,12 @@ const Navbar = () => {
                       ) : (
                         <div className="space-y-2 p-2">
                           {notifications.map(n => (
-                            <div key={n.id} className="p-3 rounded bg-white/5 border border-white/5 flex justify-between items-start">
+                            <div key={n._id} className="p-3 rounded bg-white/5 border border-white/5 flex justify-between items-start">
                               <div>
                                 <p className="text-xs text-white font-medium">{n.message}</p>
                                 <p className="text-[10px] text-gray-500 mt-1">{new Date(n.createdAt).toLocaleTimeString()}</p>
                               </div>
-                              <button onClick={() => clearNotification(n.id)} className="text-gray-500 hover:text-white transition-colors">
+                              <button onClick={() => clearNotification(n._id)} className="text-gray-500 hover:text-white transition-colors">
                                 <X size={12} />
                               </button>
                             </div>

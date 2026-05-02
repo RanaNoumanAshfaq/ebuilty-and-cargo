@@ -1,8 +1,7 @@
 import { useAuth } from '../../contexts/AuthContext';
-import { Package, Search, PlusCircle, Map, X, DollarSign, CheckCircle, Navigation } from 'lucide-react';
+import { Package, Search, PlusCircle, Map, X, DollarSign, CheckCircle, Navigation, Truck } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { db, addNotification } from '../../firebase';
-import { doc, updateDoc, collection, addDoc, query, where, onSnapshot } from 'firebase/firestore';
+import { logisticsAPI, socket } from '../../api';
 import MapViewer from '../../components/MapViewer';
 
 export default function TransporterDashboard() {
@@ -15,77 +14,46 @@ export default function TransporterDashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [showChat, setShowChat] = useState(null);
   const [msg, setMsg] = useState('');
-  
-  useEffect(() => {
-    // ... (listeners)
-    
-    const unsubTrucksRealtime = onSnapshot(collection(db, 'trucks'), (snap) => {
-      const locs = {};
-      snap.forEach(d => {
-        const data = d.data();
-        if (data.coordinates) locs[d.id] = data.coordinates;
-      });
-      setTruckLocations(locs);
-    });
 
-    return () => {
-      // ...
-      unsubTrucksRealtime();
-    };
-  }, [currentUser]);
-
-  const activeShipments = bookings.filter(b => b.status === 'Accepted');
-  const mapData = activeShipments.length > 0 && truckLocations[activeShipments[0].truckId]
-    ? { coords: truckLocations[activeShipments[0].truckId], text: `Tracking: ${activeShipments[0].cargoTitle}` }
-    : { coords: [31.5204, 74.3587], text: "No Active Shipments" };
-  
+  // Modal & Form States
   const [showCargoModal, setShowCargoModal] = useState(false);
-  const [newCargo, setNewCargo] = useState({ title: '', weight: '', origin: '', destination: '' });
   const [addingCargo, setAddingCargo] = useState(false);
-
+  const [newCargo, setNewCargo] = useState({ title: '', weight: '', origin: '', destination: '' });
+  
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedTruck, setSelectedTruck] = useState(null);
   const [bookingForm, setBookingForm] = useState({ cargoId: '', price: '' });
   const [sendingRequest, setSendingRequest] = useState(false);
 
-  useEffect(() => {
-    let unsubscribeCargo;
-    let unsubscribeTrucks;
-    let unsubscribeBookings;
-
+  const fetchData = async () => {
     if (currentUser) {
-      const cargoQuery = query(collection(db, 'cargo'), where('transporterId', '==', currentUser.uid));
-      unsubscribeCargo = onSnapshot(cargoQuery, (querySnapshot) => {
-        const items = [];
-        querySnapshot.forEach((doc) => {
-          items.push({ docId: doc.id, ...doc.data() });
+      try {
+        const [truckRes, cargoRes, bookingRes] = await Promise.all([
+          logisticsAPI.getTrucks(),
+          logisticsAPI.getCargo({ transporterId: currentUser._id }),
+          logisticsAPI.getBookings({ transporterId: currentUser._id })
+        ]);
+        
+        setAvailableTrucks(truckRes.data.filter(t => t.status === 'Available'));
+        setCargoList(cargoRes.data);
+        setBookings(bookingRes.data);
+        
+        const locs = {};
+        truckRes.data.forEach(t => {
+          if (t.coordinates) locs[t._id] = t.coordinates;
         });
-        setCargoList(items);
-      }, (error) => console.error("Error fetching cargo: ", error));
-
-      const trucksQuery = query(collection(db, 'trucks'), where('status', '==', 'Available'));
-      unsubscribeTrucks = onSnapshot(trucksQuery, (querySnapshot) => {
-        const trucks = [];
-        querySnapshot.forEach((doc) => {
-          trucks.push({ docId: doc.id, ...doc.data() });
-        });
-        setAvailableTrucks(trucks);
-      }, (error) => console.error("Error fetching trucks: ", error));
-
-      const bookingsQuery = query(collection(db, 'bookings'), where('transporterId', '==', currentUser.uid));
-      unsubscribeBookings = onSnapshot(bookingsQuery, (querySnapshot) => {
-        const reqs = [];
-        querySnapshot.forEach((doc) => {
-          reqs.push({ docId: doc.id, ...doc.data() });
-        });
-        setBookings(reqs);
-      }, (error) => console.error("Error fetching bookings: ", error));
+        setTruckLocations(locs);
+      } catch (e) { console.error("Error fetching transporter data:", e); }
     }
+  };
 
+  useEffect(() => {
+    fetchData();
+    socket.on('notification', fetchData);
+    socket.on('booking_updated', fetchData);
     return () => {
-      if (unsubscribeCargo) unsubscribeCargo();
-      if (unsubscribeTrucks) unsubscribeTrucks();
-      if (unsubscribeBookings) unsubscribeBookings();
+      socket.off('notification');
+      socket.off('booking_updated');
     };
   }, [currentUser]);
 
@@ -93,15 +61,10 @@ export default function TransporterDashboard() {
     e.preventDefault();
     setAddingCargo(true);
     try {
-      const cargoData = {
-        ...newCargo,
-        transporterId: currentUser.uid,
-        status: 'Pending',
-        createdAt: new Date().toISOString()
-      };
-      await addDoc(collection(db, 'cargo'), cargoData);
+      await logisticsAPI.postCargo(newCargo);
       setShowCargoModal(false);
       setNewCargo({ title: '', weight: '', origin: '', destination: '' });
+      fetchData();
     } catch (error) {
       console.error("Error posting cargo: ", error);
     } finally {
@@ -114,23 +77,20 @@ export default function TransporterDashboard() {
     if (!bookingForm.cargoId || !bookingForm.price) return;
     setSendingRequest(true);
     try {
-      const selectedCargo = cargoList.find(c => c.docId === bookingForm.cargoId);
+      const selectedCargo = cargoList.find(c => c._id === bookingForm.cargoId);
       const bookingData = {
-        truckId: selectedTruck.docId,
+        truckId: selectedTruck._id,
         truckPlate: selectedTruck.id,
         truckOwnerId: selectedTruck.ownerId,
         cargoId: bookingForm.cargoId,
         cargoTitle: selectedCargo.title,
-        transporterId: currentUser.uid,
-        transporterName: userData.name,
         price: bookingForm.price,
-        status: 'Pending',
-        createdAt: new Date().toISOString()
+        transporterName: userData.name
       };
-      await addDoc(collection(db, 'bookings'), bookingData);
+      await logisticsAPI.createBooking(bookingData);
       setShowBookingModal(false);
       setBookingForm({ cargoId: '', price: '' });
-      // In a real app we might show a success toast here
+      fetchData();
     } catch (error) {
       console.error("Error creating booking: ", error);
     } finally {
@@ -140,19 +100,9 @@ export default function TransporterDashboard() {
 
   const handleCounterResponse = async (booking, isAccepted) => {
     try {
-      const bookingRef = doc(db, 'bookings', booking.docId);
-      
-      if (isAccepted) {
-        await updateDoc(bookingRef, { status: 'Accepted' });
-        const truckRef = doc(db, 'trucks', booking.truckId);
-        await updateDoc(truckRef, { status: 'In Transit' });
-        const cargoRef = doc(db, 'cargo', booking.cargoId);
-        await updateDoc(cargoRef, { status: 'In Transit', assignedTruck: booking.truckPlate });
-        await addNotification(booking.truckOwnerId, `Transporter has Accepted your counter-offer for ${booking.cargoTitle}.`);
-      } else {
-        await updateDoc(bookingRef, { status: 'Rejected' });
-        await addNotification(booking.truckOwnerId, `Transporter Rejected your counter-offer for ${booking.cargoTitle}.`);
-      }
+      const status = isAccepted ? 'Accepted' : 'Rejected';
+      await logisticsAPI.updateBooking(booking._id, { status });
+      fetchData();
     } catch (error) {
       console.error("Error updating counter offer: ", error);
     }
@@ -161,29 +111,33 @@ export default function TransporterDashboard() {
   const handleSendMessage = async (booking) => {
     if (!msg) return;
     try {
-      const bookingRef = doc(db, 'bookings', booking.docId);
       const newMessages = [...(booking.messages || []), {
         sender: userData.name,
         text: msg,
         time: new Date().toISOString()
       }];
-      await updateDoc(bookingRef, { messages: newMessages });
+      await logisticsAPI.updateBooking(booking._id, { messages: newMessages });
       setMsg('');
-      await addNotification(booking.truckOwnerId, `New message from Transporter regarding ${booking.cargoTitle}`);
+      fetchData();
     } catch (e) { console.error(e); }
   };
 
   const handleCancelBooking = async (booking) => {
     if (!window.confirm("Are you sure you want to cancel this booking request?")) return;
     try {
-      await updateDoc(doc(db, 'bookings', booking.docId), { status: 'Cancelled' });
-      await addNotification(booking.truckOwnerId, `Transporter cancelled the booking request for ${booking.cargoTitle}.`);
+      await logisticsAPI.updateBooking(booking._id, { status: 'Cancelled' });
+      fetchData();
     } catch (error) {
       console.error("Error cancelling booking: ", error);
     }
   };
 
   const pendingCargos = cargoList.filter(c => c.status === 'Pending');
+  const activeShipments = bookings.filter(b => b.status === 'Accepted');
+
+  const mapData = activeShipments.length > 0 && truckLocations[activeShipments[0].truckId]
+    ? { coords: truckLocations[activeShipments[0].truckId], text: `Tracking: ${activeShipments[0].cargoTitle}` }
+    : { coords: [31.5204, 74.3587], text: "No Active Shipments" };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
@@ -223,7 +177,7 @@ export default function TransporterDashboard() {
           <h3 className="text-xl font-bold text-white mb-4">Pending Requests</h3>
           <div className="flex-1 overflow-y-auto space-y-3 pr-2">
             {bookings.filter(b => b.status === 'Pending' || b.status === 'Counter-Offered').map(b => (
-              <div key={b.docId} className="p-3 rounded bg-white/5 border border-white/10 flex justify-between items-center">
+              <div key={b._id} className="p-3 rounded bg-white/5 border border-white/10 flex justify-between items-center">
                 <div><p className="text-white font-bold text-sm">{b.cargoTitle}</p><p className="text-[10px] text-gray-400">Truck: {b.truckPlate}</p></div>
                 <div className="text-right">
                   <p className="text-neon-blue font-bold text-sm">Rs. {b.price}</p>
@@ -290,7 +244,7 @@ export default function TransporterDashboard() {
                 >
                   <option value="">-- Choose Pending Cargo --</option>
                   {pendingCargos.map(c => (
-                    <option key={c.docId} value={c.docId}>{c.title} ({c.origin} to {c.destination})</option>
+                    <option key={c._id} value={c._id}>{c.title} ({c.origin} to {c.destination})</option>
                   ))}
                 </select>
                 {pendingCargos.length === 0 && <p className="text-xs text-orange-400 mt-1">You have no pending cargo. Post cargo first.</p>}
@@ -338,7 +292,7 @@ export default function TransporterDashboard() {
           return (
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
               {filteredBookings.map(booking => (
-                <div key={booking.docId} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${booking.status === 'Counter-Offered' ? 'border-neon-purple' : booking.status === 'Accepted' ? 'border-neon-blue' : booking.status === 'Completed' ? 'border-green-500' : 'border-gray-500'}`}>
+                <div key={booking._id} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${booking.status === 'Counter-Offered' ? 'border-neon-purple' : booking.status === 'Accepted' ? 'border-neon-blue' : booking.status === 'Completed' ? 'border-green-500' : 'border-gray-500'}`}>
                   <div className="flex justify-between items-center mb-2">
                     <div>
                       <p className="font-bold text-white">{booking.cargoTitle}</p>
@@ -369,8 +323,8 @@ export default function TransporterDashboard() {
                       {booking.eta && <p className="text-xs text-neon-blue">ETA: {booking.eta}</p>}
                       {booking.status === 'Accepted' && (
                         <>
-                          <button onClick={() => setShowChat(booking.docId)} className="w-full mt-2 bg-white/5 border border-white/10 text-[10px] py-1.5 rounded hover:bg-white/10 text-white font-bold transition-colors">Open Chat</button>
-                          {showChat === booking.docId && (
+                          <button onClick={() => setShowChat(booking._id)} className="w-full mt-2 bg-white/5 border border-white/10 text-[10px] py-1.5 rounded hover:bg-white/10 text-white font-bold transition-colors">Open Chat</button>
+                          {showChat === booking._id && (
                             <div className="mt-2 p-2 rounded bg-black/40 border border-white/5">
                               <div className="max-h-24 overflow-y-auto space-y-1 mb-2 pr-1 custom-scrollbar">
                                 {(booking.messages || []).map((m, i) => (
@@ -417,7 +371,7 @@ export default function TransporterDashboard() {
               <p className="text-gray-400 text-center py-8">No available trucks at the moment.</p>
             ) : (
               availableTrucks.map(truck => (
-                <div key={truck.docId} className="p-3 rounded-lg bg-white/5 border border-white/5 flex justify-between items-center">
+                <div key={truck._id} className="p-3 rounded-lg bg-white/5 border border-white/5 flex justify-between items-center">
                   <div>
                     <p className="text-white font-semibold">{truck.capacity}</p>
                     <p className="text-xs text-gray-400">Location: {truck.loc} • Plate: {truck.id}</p>
@@ -443,7 +397,7 @@ export default function TransporterDashboard() {
           ) : (
             <div className="space-y-4 h-[400px] overflow-y-auto pr-2">
               {cargoList.map(cargo => (
-                <div key={cargo.docId} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${cargo.status === 'Pending' ? 'border-orange-500' : cargo.status === 'In Transit' ? 'border-neon-blue' : 'border-green-500'} relative overflow-hidden`}>
+                <div key={cargo._id} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${cargo.status === 'Pending' ? 'border-orange-500' : cargo.status === 'In Transit' ? 'border-neon-blue' : 'border-green-500'} relative overflow-hidden`}>
                   <div className="flex justify-between items-start mb-2 relative z-10">
                     <div>
                       <p className="font-bold text-white">{cargo.title} ({cargo.weight})</p>

@@ -1,8 +1,7 @@
 import { useAuth } from '../contexts/AuthContext';
 import { User, Mail, Shield, Calendar, LogOut, AlertTriangle, Send } from 'lucide-react';
 import { useState } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { logisticsAPI } from '../api';
 
 export default function Profile() {
   const { currentUser, userData, logout } = useAuth();
@@ -12,13 +11,7 @@ export default function Profile() {
   const handleSendReport = async (e) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'complaints'), {
-        ...report,
-        userId: currentUser.uid,
-        userName: userData.name,
-        userRole: userData.role,
-        createdAt: new Date().toISOString()
-      });
+      await logisticsAPI.postComplaint(report);
       alert("Report sent successfully. Admin will review it.");
       setShowReport(false);
       setReport({ subject: '', description: '' });
@@ -66,7 +59,7 @@ export default function Profile() {
               <Calendar size={18} />
               <span className="text-sm">User ID</span>
             </div>
-            <p className="text-white font-mono text-xs">{currentUser?.uid}</p>
+            <p className="text-white font-mono text-xs">{currentUser?._id}</p>
           </div>
         </div>
 

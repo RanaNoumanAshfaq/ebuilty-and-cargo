@@ -15,9 +15,20 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecargo
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
 
 // MongoDB Connection
+if (!process.env.MONGODB_URI) {
+  console.warn('⚠️ MONGODB_URI not found in environment. Using default local connection.');
+}
+
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+  .then(() => {
+    console.log('✅ MongoDB Connected');
+    console.log(`📡 Connected to: ${MONGODB_URI.split('@')[1] || 'localhost'}`);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB Connection Error:');
+    console.error(err.message);
+    process.exit(1); // Exit if cannot connect to DB
+  });
 
 // Auth Routes
 app.post('/api/auth/register', async (req, res) => {
@@ -35,6 +46,7 @@ app.post('/api/auth/register', async (req, res) => {
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({ token, user: { id: user._id, name, email, role, status } });
   } catch (error) {
+    console.error("Registration Error:", error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -78,6 +90,15 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+app.patch('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(req.user.id, req.body, { new: true }).select('-password');
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 const http = require('http');
 const { Server } = require('socket.io');
 const { Truck, Cargo, Booking, Notification, Complaint } = require('./models/Logistics');
@@ -111,7 +132,8 @@ const sendNotification = async (userId, message) => {
 // Logistics Routes
 app.get('/api/trucks', authMiddleware, async (req, res) => {
   try {
-    const trucks = await Truck.find(req.query.ownerId ? { ownerId: req.query.ownerId } : {});
+    const filter = req.query.ownerId ? { ownerId: req.query.ownerId } : {};
+    const trucks = await Truck.find(filter);
     res.json(trucks);
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
@@ -124,11 +146,29 @@ app.post('/api/trucks', authMiddleware, async (req, res) => {
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-app.post('/api/cargo', authMiddleware, async (req, res) => {
+app.patch('/api/trucks/:id', authMiddleware, async (req, res) => {
   try {
-    const cargo = new Cargo({ ...req.body, transporterId: req.user.id });
-    await cargo.save();
-    res.status(201).json(cargo);
+    const truck = await Truck.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(truck);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.delete('/api/trucks/:id', authMiddleware, async (req, res) => {
+  try {
+    await Truck.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Truck deleted' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.get('/api/bookings', authMiddleware, async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.truckOwnerId) filter.truckOwnerId = req.query.truckOwnerId;
+    if (req.query.transporterId) filter.transporterId = req.query.transporterId;
+    if (req.query.status) filter.status = { $in: req.query.status.split(',') };
+    
+    const bookings = await Booking.find(filter);
+    res.json(bookings);
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
@@ -137,6 +177,7 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
     const booking = new Booking({ ...req.body, transporterId: req.user.id });
     await booking.save();
     await sendNotification(booking.truckOwnerId, `New booking request for ${booking.cargoTitle}`);
+    io.emit('booking_updated'); // Broad notification for dashboards
     res.status(201).json(booking);
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
@@ -144,10 +185,140 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
 app.patch('/api/bookings/:id', authMiddleware, async (req, res) => {
   try {
     const booking = await Booking.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    // Notify appropriate party
     const targetId = req.user.id.toString() === booking.truckOwnerId.toString() ? booking.transporterId : booking.truckOwnerId;
     await sendNotification(targetId, `Booking status updated to ${booking.status} for ${booking.cargoTitle}`);
+    io.emit('booking_updated');
     res.json(booking);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    const notifications = await Notification.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.json(notifications);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
+  try {
+    await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    res.json({ message: 'Notification deleted' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+// Cargo Routes
+app.get('/api/cargo', authMiddleware, async (req, res) => {
+  try {
+    const filter = req.query.transporterId ? { transporterId: req.query.transporterId } : {};
+    const cargo = await Cargo.find(filter).sort({ createdAt: -1 });
+    res.json(cargo);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.post('/api/cargo', authMiddleware, async (req, res) => {
+  try {
+    const cargo = new Cargo({ ...req.body, transporterId: req.user.id });
+    await cargo.save();
+    res.status(201).json(cargo);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.patch('/api/cargo/:id', authMiddleware, async (req, res) => {
+  try {
+    const cargo = await Cargo.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(cargo);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.delete('/api/cargo/:id', authMiddleware, async (req, res) => {
+  try {
+    await Cargo.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Cargo deleted' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.post('/api/bookings/:id/complete', authMiddleware, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+    // 1. Update Booking
+    booking.status = 'Completed';
+    booking.completedAt = new Date();
+    await booking.save();
+
+    // 2. Update Truck
+    await Truck.findByIdAndUpdate(booking.truckId, { status: 'Available' });
+
+    // 3. Update Cargo
+    await Cargo.findByIdAndUpdate(booking.cargoId, { status: 'Completed' });
+
+    // 4. Notifications
+    await sendNotification(booking.transporterId, `Delivery completed for ${booking.cargoTitle}.`);
+    
+    io.emit('booking_updated');
+    res.json({ message: 'Booking marked as completed', booking });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+// Complaints Routes
+app.post('/api/complaints', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const complaint = new Complaint({ 
+      ...req.body, 
+      userId: req.user.id,
+      userName: user.name,
+      userRole: user.role
+    });
+    await complaint.save();
+    res.status(201).json(complaint);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.get('/api/complaints', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+  try {
+    const complaints = await Complaint.find().sort({ createdAt: -1 });
+    res.json(complaints);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.patch('/api/complaints/:id', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+  try {
+    const complaint = await Complaint.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(complaint);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+// Admin User Management
+app.get('/api/users', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+  try {
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.patch('/api/users/:id', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+  try {
+    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true }).select('-password');
+    await sendNotification(user._id, `Your account status has been updated to: ${user.status}`);
+    res.json(user);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.get('/api/admin/stats', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+  try {
+    const usersCount = await User.countDocuments();
+    const trucksCount = await Truck.countDocuments();
+    const bookingsCount = await Booking.countDocuments();
+    const activeShipments = await Booking.countDocuments({ status: 'Accepted' });
+    const complaintsCount = await Complaint.countDocuments({ status: 'Open' });
+    res.json({ users: usersCount, trucks: trucksCount, bookings: bookingsCount, activeShipments, complaints: complaintsCount });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
