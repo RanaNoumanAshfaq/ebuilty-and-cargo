@@ -1,0 +1,15 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Commit Number: 345 of 1002
+Day of Week:   Monday
+Date & Time:   2026-05-11 13:04:53
+Module Scope:  FLEET - Fleet Radar & Telemetry
+Commit Title:  fleet: [2026-05-11] Filter available trucks by current city and load capacity thresholds
+
+CHANGES ON THIS DATE (Monday, 2026-05-11):
+• Filter available trucks by current city and load capacity thresholds
+• Component: src/fleet / server/modules/fleet
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
