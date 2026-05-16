@@ -1,0 +1,86 @@
+{
+  "subject": "data_science",
+  "timestamp": "2026-05-11T02:42:46.354317",
+  "courses": [
+    {
+      "title": "Data Science Bootcamp",
+      "provider": "Udemy",
+      "link": "https://udemy.com"
+    }
+  ],
+  "internships": [
+    {
+      "title": "Python Intern",
+      "company": "TechCorp",
+      "skills": [
+        "python",
+        "data_science"
+      ],
+      "link": "https://techcorp.com"
+    },
+    {
+      "title": "Data Science Intern",
+      "company": "InsightCorp",
+      "skills": [
+        "data_science",
+        "statistics"
+      ],
+      "link": "https://insightcorp.com"
+    },
+    {
+      "title": "Pandas Intern",
+      "company": "DataLab",
+      "skills": [
+        "pandas",
+        "data_science"
+      ],
+      "link": "https://datalab.com"
+    },
+    {
+      "title": "NumPy Intern",
+      "company": "ArrayWorks",
+      "skills": [
+        "numpy",
+        "data_science"
+      ],
+      "link": "https://arrayworks.com"
+    },
+    {
+      "title": "Statistics Intern",
+      "company": "StatCorp",
+      "skills": [
+        "statistics",
+        "data_science"
+      ],
+      "link": "https://statcorp.com"
+    }
+  ],
+  "jobs": [
+    {
+      "title": "Data Scientist",
+      "company": "ABC Ltd",
+      "location": "Remote",
+      "salary": 120000,
+      "description": "data science statistics machine learning analytics",
+      "link": "abc.com",
+      "is_fake": 0
+    }
+  ],
+  "avg_salary": 120000.0,
+  "roles": [
+    "Data Scientist",
+    "Data Analyst"
+  ],
+  "learning_links": [
+    {
+      "title": "Data Science Specialization",
+      "platform": "Coursera",
+      "link": "https://coursera.org"
+    },
+    {
+      "title": "Python for Data Science",
+      "platform": "YouTube",
+      "link": "https://youtube.com"
+    }
+  ]
+}

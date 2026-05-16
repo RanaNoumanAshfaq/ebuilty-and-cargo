@@ -1,0 +1,50 @@
+title,company,location,salary,description,link,is_fake
+Frontend Developer,TechCorp,Remote,60000,"html css javascript frontend web ui","techcorp.com",0
+Frontend Engineer,WebLtd,Onsite,70000,"react vue angular frontend development","webltd.com",0
+Data Analyst,DataInc,Hybrid,75000,"python pandas numpy data analysis statistics","datainc.com",0
+Machine Learning Engineer,AICorp,Remote,120000,"machine learning ai neural networks deep learning","aicorp.com",0
+Cyber Security Analyst,SecureLtd,Onsite,100000,"network security firewall hacking cyber defense","secureltd.com",0
+Network Engineer,NetWorks,Remote,95000,"networking routing switching tcp ip firewalls","networks.com",0
+Backend Developer,ServerInc,Remote,85000,"sql database backend api server","serverinc.com",0
+Software Engineer,SoftCorp,Hybrid,80000,"c c++ cpp system programming memory os","softcorp.com",0
+Mobile App Developer,AppLtd,Remote,90000,"android ios flutter mobile app development","appltd.com",0
+Data Scientist,ABC Ltd,Remote,120000,"data science statistics machine learning analytics","abc.com",0
+DevOps Engineer,CloudCorp,Remote,110000,"devops docker kubernetes ci cd","cloudcorp.com",0
+Cloud Engineer,CloudOps,Remote,115000,"aws cloud infrastructure devops cloud computing","cloudops.com",0
+Python Developer,PyCorp,Remote,95000,"python backend automation","pycorp.com",0
+Java Developer,JavaInc,Onsite,90000,"java spring boot enterprise","javainc.com",0
+JavaScript Developer,JS Ltd,Remote,80000,"javascript react node full stack","jsltd.com",0
+Cyber Security Engineer,SecCorp,Hybrid,105000,"cyber security ethical hacking","seccorp.com",0
+Web Developer,WebDev Inc,Remote,70000,"html css js web development","webdevinc.com",0
+XR Developer,XR Corp,Hybrid,115000,"ar vr xr ar_vr unity unreal","xrcorp.com",0
+IoT Engineer,IoT Inc,Remote,105000,"iot arduino raspberry pi sensors","iotinc.com",0
+C# Developer,GameSoft,Remote,95000,"csharp c# unity game development","gamesoft.com",0
+TypeScript Developer,TypeCorp,Remote,85000,"typescript javascript web app development","typecorp.com",0
+PHP Backend Developer,LegacyWeb,Remote,65000,"php mysql backend legacy systems","legacyweb.com",0
+API Developer,APICorp,Remote,90000,"rest api backend developer","apicorp.com",0
+NLP Engineer,NLP Labs,Remote,115000,"nlp natural language processing machine learning","nlplabs.com",0
+Computer Vision Engineer,VisionAI,Remote,120000,"computer vision deep learning cv","visionai.com",0
+Ethical Hacker,SecurityLab,Remote,98000,"ethical hacking penetration testing","securitylab.com",0
+Security Engineer,FireWall Inc,Remote,105000,"firewall security network defense","firewallinc.com",0
+Security Researcher,CryptoSecure,Remote,112000,"cryptography security research","cryptosecure.com",0
+SOC Analyst,SOC Solutions,Remote,98000,"soc analyst security operations","socsolutions.com",0
+Database Administrator,DataBank,Onsite,90000,"mysql postgresql sql database administration","databank.com",0
+NoSQL Database Engineer,NoSQLNet,Remote,95000,"mongodb nosql database engineer","nosqlnet.com",0
+Android Developer,AndroidWorks,Remote,92000,"android java kotlin mobile development","androidworks.com",0
+iOS Developer,AppWorks,Remote,93000,"ios swift mobile app development","appworks.com",0
+Flutter Developer,FlutterLab,Remote,94000,"flutter cross platform mobile apps","flutterlab.com",0
+React Native Developer,MobileSoft,Remote,94000,"react native mobile development","mobilesoft.com",0
+Unreal Engine Developer,GameStudio,Remote,100000,"unreal engine game programming 3d graphics","gamestudio.com",0
+Linux System Administrator,ServerOps,Remote,90000,"linux administration servers","serverops.com",0
+Systems Engineer,SystemWorks,Remote,105000,"operating systems systems engineering","systemworks.com",0
+Embedded Systems Developer,EmbeddedInc,Remote,102000,"assembly language embedded systems","embeddedinc.com",0
+Hardware Engineer,HardwareLab,Onsite,110000,"computer architecture hardware design","hardwarelab.com",0
+Business Analyst,BizData,Remote,85000,"excel power bi data analysis","bizdata.com",0
+BI Analyst,BIData,Remote,88000,"power bi business intelligence","bidata.com",0
+Data Visualization Specialist,VisualData,Remote,90000,"data visualization dashboards","visualdata.com",0
+BI Developer,BIDev,Remote,92000,"business intelligence development","bidev.com",0
+Blockchain Developer,BlockBase,Remote,115000,"blockchain smart contracts solidity","blockbase.com",0
+Web3 Developer,Web3Corp,Remote,118000,"smart contracts blockchain web3","web3corp.com",0
+Robotics Engineer,RoboCorp,Remote,108000,"robotics automation embedded systems","robocorp.com",0
+Quantum Researcher,QuantumX,Remote,140000,"quantum computing research algorithms","quantumx.com",0
+ML Engineer,FakeCorp,Online,9999999,"Too good job","fake-link",1

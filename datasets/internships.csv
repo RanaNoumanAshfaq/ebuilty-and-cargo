@@ -1,0 +1,11 @@
+skills,internship
+Python ML AI,AI Intern
+Networking Security,Cyber Security Intern
+[
+  {
+    "title": "AI Intern",
+    "company": "Google",
+    "skills": ["Python", "ML"],
+    "link": "https://..."
+  }
+]

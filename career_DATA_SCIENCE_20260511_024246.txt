@@ -1,0 +1,39 @@
+============================================================
+CAREER RECOMMENDATION REPORT
+============================================================
+
+Subject: DATA_SCIENCE
+Generated: 2026-05-11 02:42:46
+
+🎓 COURSES:
+------------------------------------------------------------
+  • Data Science Bootcamp
+    https://udemy.com
+
+💼 INTERNSHIPS:
+------------------------------------------------------------
+  • Python Intern at TechCorp
+  • Data Science Intern at InsightCorp
+  • Pandas Intern at DataLab
+  • NumPy Intern at ArrayWorks
+  • Statistics Intern at StatCorp
+
+📊 JOBS:
+------------------------------------------------------------
+  • Data Scientist - $120,000
+
+💰 AVERAGE SALARY: $120,000.00
+
+🔎 ROLE SUGGESTIONS:
+------------------------------------------------------------
+  • Data Scientist
+  • Data Analyst
+
+📚 LEARNING LINKS:
+------------------------------------------------------------
+  • Data Science Specialization | Coursera
+    https://coursera.org
+  • Python for Data Science | YouTube
+    https://youtube.com
+
+============================================================

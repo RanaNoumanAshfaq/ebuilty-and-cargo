@@ -1,0 +1,279 @@
+from career_engine import generate_career_response
+import json
+import csv
+from datetime import datetime
+import sys
+import os
+
+
+def normalize_subject(subject):
+    subject = subject.lower().strip()
+
+    # Remove arrow-syntax and extra role hints like "AWS → Cloud Engineer"
+    for separator in ["→", "->", ":"]:
+        if separator in subject:
+            subject = subject.split(separator)[0].strip()
+
+    subject = subject.replace("→", "").replace("->", "").replace("|", "").strip()
+
+    mappings = {
+        "c / c++": "c",
+        "c++": "cpp",
+        "c#": "csharp",
+        "c_sharp": "csharp",
+        "artificial intelligence": "ai",
+        "ai": "ai",
+        "machine learning": "machine_learning",
+        "ml": "machine_learning",
+        "deep learning": "deep_learning",
+        "data science": "data_science",
+        "pandas": "pandas",
+        "numpy": "numpy",
+        "statistics": "statistics",
+        "nlp": "nlp",
+        "computer vision": "computer_vision",
+        "cyber security": "cyber_security",
+        "security": "cyber_security",
+        "networking": "networking",
+        "ethical hacking": "ethical_hacking",
+        "firewall": "firewall",
+        "cryptography": "cryptography",
+        "soc": "soc",
+        "sql": "sql",
+        "mysql": "mysql",
+        "postgresql": "postgresql",
+        "mongodb": "mongodb",
+        "database design": "database_design",
+        "apis": "apis",
+        "api": "apis",
+        "html / css": "html_css",
+        "html + css + js": "html_css_js",
+        "react / angular / vue": "frontend_frameworks",
+        "react native": "react_native",
+        "node.js": "nodejs",
+        "nodejs": "nodejs",
+        "full stack": "full_stack",
+        "frontend": "javascript",
+        "javascript": "javascript",
+        "typescript": "typescript",
+        "php": "php",
+        "java": "java",
+        "android": "android",
+        "ios": "ios",
+        "flutter": "flutter",
+        "unity": "unity",
+        "unreal engine": "unreal_engine",
+        "3d graphics": "three_d_graphics",
+        "aws": "cloud",
+        "azure": "cloud",
+        "docker": "docker",
+        "kubernetes": "kubernetes",
+        "ci/cd": "ci_cd",
+        "ci cd": "ci_cd",
+        "linux": "linux",
+        "operating systems": "operating_systems",
+        "assembly language": "assembly_language",
+        "computer architecture": "computer_architecture",
+        "excel": "excel",
+        "power bi": "power_bi",
+        "data visualization": "data_visualization",
+        "business intelligence": "business_intelligence",
+        "blockchain": "blockchain",
+        "smart contracts": "smart_contracts",
+        "iot": "iot",
+        "robotics": "robotics",
+        "ar/vr": "ar_vr",
+        "xr": "ar_vr",
+        "cloud": "cloud",
+        "cloud engineering": "cloud",
+        "cloud engineer": "cloud"
+    }
+    return mappings.get(subject, subject.replace(" ", "_").replace("/", ""))
+
+
+def print_response(data):
+
+    print("\n🎓 COURSES:")
+    for c in data["courses"]:
+        print("-", c["title"], "|", c["link"])
+
+    print("\n💼 INTERNSHIPS:")
+    for i in data["internships"]:
+        print("-", i["title"], "at", i["company"])
+
+    print("\n📊 JOBS:")
+    for j in data["jobs"]:
+        print("-", j["title"], "-", j["salary"])
+
+    print("\n💰 AVERAGE SALARY:", data["avg_salary"])
+
+    print("\n🔎 ROLE SUGGESTIONS:")
+    if data.get("roles"):
+        for r in data["roles"]:
+            print("-", r)
+    else:
+        print("- No direct role suggestions available for this input.")
+
+    print("\n📚 LEARNING LINKS:")
+    for l in data["learning_links"]:
+        print("-", l["title"], "|", l["platform"], "|", l["link"])
+
+
+def export_to_json(data, filename=None):
+    if not filename:
+        subject = data["subject"].upper()
+        filename = f"career_{subject}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    
+    export_data = {
+        "subject": data["subject"],
+        "timestamp": datetime.now().isoformat(),
+        "courses": data["courses"],
+        "internships": data["internships"],
+        "jobs": data["jobs"],
+        "avg_salary": data["avg_salary"],
+        "roles": data["roles"],
+        "learning_links": data["learning_links"]
+    }
+    
+    with open(filename, 'w') as f:
+        json.dump(export_data, f, indent=2)
+    
+    print(f"✅ Saved to {filename}")
+    return filename
+
+
+def export_to_csv(data, filename=None):
+    if not filename:
+        subject = data["subject"].upper()
+        filename = f"career_{subject}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        writer.writerow(["CAREER RECOMMENDATION REPORT"])
+        writer.writerow(["Subject", data["subject"]])
+        writer.writerow(["Timestamp", datetime.now().isoformat()])
+        writer.writerow([])
+        
+        writer.writerow(["COURSES"])
+        for c in data["courses"]:
+            writer.writerow(["Course", c["title"], c["link"]])
+        writer.writerow([])
+        
+        writer.writerow(["INTERNSHIPS"])
+        for i in data["internships"]:
+            writer.writerow(["Internship", i["title"], i["company"]])
+        writer.writerow([])
+        
+        writer.writerow(["JOBS"])
+        for j in data["jobs"]:
+            writer.writerow(["Job", j["title"], j["salary"]])
+        writer.writerow([])
+        
+        writer.writerow(["AVERAGE SALARY", data["avg_salary"]])
+        writer.writerow([])
+        
+        writer.writerow(["ROLE SUGGESTIONS"])
+        for r in data["roles"]:
+            writer.writerow(["Role", r])
+        writer.writerow([])
+        
+        writer.writerow(["LEARNING LINKS"])
+        for l in data["learning_links"]:
+            writer.writerow(["Link", l["title"], l["platform"], l["link"]])
+    
+    print(f"✅ Saved to {filename}")
+    return filename
+
+
+def export_to_text(data, filename=None):
+    if not filename:
+        subject = data["subject"].upper()
+        filename = f"career_{subject}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write("=" * 60 + "\n")
+        f.write("CAREER RECOMMENDATION REPORT\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Subject: {data['subject'].upper()}\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        f.write("🎓 COURSES:\n")
+        f.write("-" * 60 + "\n")
+        for c in data["courses"]:
+            f.write(f"  • {c['title']}\n    {c['link']}\n")
+        f.write("\n")
+        
+        f.write("💼 INTERNSHIPS:\n")
+        f.write("-" * 60 + "\n")
+        for i in data["internships"]:
+            f.write(f"  • {i['title']} at {i['company']}\n")
+        f.write("\n")
+        
+        f.write("📊 JOBS:\n")
+        f.write("-" * 60 + "\n")
+        for j in data["jobs"]:
+            f.write(f"  • {j['title']} - ${j['salary']:,.0f}\n")
+        f.write("\n")
+        
+        f.write(f"💰 AVERAGE SALARY: ${data['avg_salary']:,.2f}\n\n")
+        
+        f.write("🔎 ROLE SUGGESTIONS:\n")
+        f.write("-" * 60 + "\n")
+        for r in data["roles"]:
+            f.write(f"  • {r}\n")
+        f.write("\n")
+        
+        f.write("📚 LEARNING LINKS:\n")
+        f.write("-" * 60 + "\n")
+        for l in data["learning_links"]:
+            f.write(f"  • {l['title']} | {l['platform']}\n    {l['link']}\n")
+        f.write("\n")
+        f.write("=" * 60 + "\n")
+    
+    print(f"✅ Saved to {filename}")
+    return filename
+
+
+def save_results(data):
+    # Check if running interactively
+    if not sys.stdin.isatty():
+        # Non-interactive mode (piped input) - auto-save as all formats
+        export_to_json(data)
+        export_to_csv(data)
+        export_to_text(data)
+        return
+    
+    print("\n📁 SAVE OPTIONS:")
+    print("1. JSON (Structured data)")
+    print("2. CSV (Spreadsheet format)")
+    print("3. TXT (Text file)")
+    print("4. All formats")
+    print("5. Skip")
+    
+    choice = input("\nSelect option (1-5): ").strip()
+    
+    if choice == "1":
+        export_to_json(data)
+    elif choice == "2":
+        export_to_csv(data)
+    elif choice == "3":
+        export_to_text(data)
+    elif choice == "4":
+        export_to_json(data)
+        export_to_csv(data)
+        export_to_text(data)
+    elif choice == "5":
+        print("⏭️  Skipped save")
+    else:
+        print("❌ Invalid option")
+
+
+if __name__ == "__main__":
+
+    subject = input("Enter subject (AI / data_science): ")
+    normalized = normalize_subject(subject)
+    result = generate_career_response(normalized)
+
+    print_response(result)
+    save_results(result)
