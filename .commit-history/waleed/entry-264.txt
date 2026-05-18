@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 264 of 700
+Day of Week:   Monday
+Date & Time:   2026-05-18 22:25:55 +0500
+Module Scope:  ANALYTICS - Logistics KPI & Analytics Dashboard
+Commit Title:  analytics: [2026-05-18] Render top shipping routes bar chart comparing Karachi, Lahore, Faisalabad, and Islamabad
+
+CHANGES ON THIS DATE (Monday, 2026-05-18):
+• Render top shipping routes bar chart comparing Karachi, Lahore, Faisalabad, and Islamabad
+• Component: src/analytics / server/modules/analytics
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
