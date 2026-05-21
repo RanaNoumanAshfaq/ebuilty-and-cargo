@@ -16,3 +16,6 @@ console.log('feat: improve tracking accuracy logic');
 
 // feat: add shipping form validation - 2026-05-01 12:57:45
 console.log('feat: add shipping form validation');
+
+// feat: add error handling middleware - 2026-05-21 22:46:37
+console.log('feat: add error handling middleware');
