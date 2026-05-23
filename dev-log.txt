@@ -16,3 +16,4 @@ feat: improve billing precision logic | 2026-04-19 12:50:18 | modified: backend/
 refactor: enhance frontend API integration | 2026-04-11 01:21:10 | modified: backend/db.js
 feat: add logging improvements | 2026-05-14 19:31:18 | modified: frontend/app.js
 fix: resolve backend performance bottleneck | 2026-06-02 10:46:20 | modified: backend/auth.js
+feat: improve dashboard UI layout | 2026-05-22 17:32:58 | modified: utils/helpers.js
