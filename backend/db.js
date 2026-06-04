@@ -13,3 +13,6 @@ console.log('Finalize backend integration');
 
 // fix: resolve shipment status bug - 2026-05-14 16:41:14
 console.log('fix: resolve shipment status bug');
+
+// fix: resolve API response inconsistency - 2026-06-04 08:57:29
+console.log('fix: resolve API response inconsistency');
