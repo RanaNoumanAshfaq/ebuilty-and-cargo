@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 325 of 700
+Day of Week:   Saturday
+Date & Time:   2026-06-06 15:27:21 +0500
+Module Scope:  CARGO - Cargo Logistics & Dispatch
+Commit Title:  cargo: [2026-06-06] Add packaging type classification for corrugated cartons and wooden crates
+
+CHANGES ON THIS DATE (Saturday, 2026-06-06):
+• Add packaging type classification for corrugated cartons and wooden crates
+• Component: src/cargo / server/modules/cargo
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
