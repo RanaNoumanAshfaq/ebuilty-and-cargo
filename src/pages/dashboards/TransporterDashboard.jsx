@@ -1,423 +1,699 @@
 import { useAuth } from '../../contexts/AuthContext';
-import { Package, Search, PlusCircle, Map, X, DollarSign, CheckCircle, Navigation, Truck } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { logisticsAPI, socket } from '../../api';
-import MapViewer from '../../components/MapViewer';
+import { 
+  Users, FileText, Activity, AlertTriangle, Check, X, XCircle, Shield, 
+  Package, Trash2, CheckCircle, Loader2, ArrowRight, Truck, 
+  Mail, Phone, Clock, Eye, AlertCircle, FileCheck, Send, MessageSquare, 
+  MapPin, Calendar
+} from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { logisticsAPI, authAPI, adminAPI, socket } from '../../api';
+import BiltyModal from '../../components/BiltyModal';
 
 export default function TransporterDashboard() {
   const { userData, currentUser } = useAuth();
-  
-  const [cargoList, setCargoList] = useState([]);
-  const [availableTrucks, setAvailableTrucks] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [truckLocations, setTruckLocations] = useState({});
-  const [showHistory, setShowHistory] = useState(false);
-  const [showChat, setShowChat] = useState(null);
-  const [msg, setMsg] = useState('');
+  const [activeTab, setActiveTab] = useState('requests');
+  const [loading, setLoading] = useState(true);
 
-  // Modal & Form States
-  const [showCargoModal, setShowCargoModal] = useState(false);
-  const [addingCargo, setAddingCargo] = useState(false);
-  const [newCargo, setNewCargo] = useState({ title: '', weight: '', origin: '', destination: '' });
-  
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedTruck, setSelectedTruck] = useState(null);
-  const [bookingForm, setBookingForm] = useState({ cargoId: '', price: '' });
-  const [sendingRequest, setSendingRequest] = useState(false);
+  // Live state arrays
+  const [cargoRequests, setCargoRequests] = useState([]); // All cargo
+  const [availableTrucks, setAvailableTrucks] = useState([]); // All available trucks
+  const [bookings, setBookings] = useState([]); // Active and completed bookings
+
+  // Action states
+  const [rejectingCargoId, setRejectingCargoId] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
+  // Assign Truck states
+  const [selectedTruckForAssign, setSelectedTruckForAssign] = useState(null);
+  const [selectedCargoForAssign, setSelectedCargoForAssign] = useState(null);
+  const [assignPrice, setAssignPrice] = useState('');
+  const [showAssignModal, setShowAssignModal] = useState(false);
+
+  // Active Shipments state
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [chatMessageText, setChatMessageText] = useState('');
+
+  // Bilty modal state
+  const [biltyModalBooking, setBiltyModalBooking] = useState(null);
+  const chatEndRef = useRef(null);
 
   const fetchData = async () => {
     if (currentUser) {
       try {
-        const [truckRes, cargoRes, bookingRes] = await Promise.all([
-          logisticsAPI.getTrucks(),
-          logisticsAPI.getCargo({ transporterId: currentUser._id }),
-          logisticsAPI.getBookings({ transporterId: currentUser._id })
+        const [cargoRes, trucksRes, bookingsRes] = await Promise.all([
+          logisticsAPI.getCargo({ transporterId: currentUser.id || currentUser._id }),
+          logisticsAPI.getTrucks({ status: 'Available' }),
+          logisticsAPI.getBookings({ transporterId: currentUser.id || currentUser._id })
         ]);
-        
-        setAvailableTrucks(truckRes.data.filter(t => t.status === 'Available'));
-        setCargoList(cargoRes.data);
-        setBookings(bookingRes.data);
-        
-        const locs = {};
-        truckRes.data.forEach(t => {
-          if (t.coordinates) locs[t._id] = t.coordinates;
-        });
-        setTruckLocations(locs);
-      } catch (e) { console.error("Error fetching transporter data:", e); }
+        setCargoRequests(cargoRes.data);
+        setAvailableTrucks(trucksRes.data);
+        setBookings(bookingsRes.data);
+        setLoading(false);
+      } catch (e) {
+        console.error("Error fetching transporter data:", e);
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchData();
-    socket.on('notification', fetchData);
+
     socket.on('booking_updated', fetchData);
+    socket.on('notification', fetchData);
+
     return () => {
-      socket.off('notification');
       socket.off('booking_updated');
+      socket.off('notification');
     };
   }, [currentUser]);
 
-  const handlePostCargo = async (e) => {
-    e.preventDefault();
-    setAddingCargo(true);
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedBooking?.messages]);
+
+  // Sync selected booking details when bookings refresh
+  useEffect(() => {
+    if (selectedBooking) {
+      const updated = bookings.find(b => b._id === selectedBooking._id);
+      if (updated) setSelectedBooking(updated);
+    }
+  }, [bookings]);
+
+  const handleCargoResponse = async (cargoId, status) => {
+    if (status === 'Rejected') {
+      setRejectingCargoId(cargoId);
+      setRejectionReason('');
+      return;
+    }
     try {
-      await logisticsAPI.postCargo(newCargo);
-      setShowCargoModal(false);
-      setNewCargo({ title: '', weight: '', origin: '', destination: '' });
+      await logisticsAPI.respondToCargo(cargoId, { status });
       fetchData();
-    } catch (error) {
-      console.error("Error posting cargo: ", error);
-    } finally {
-      setAddingCargo(false);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleBookTruck = async (e) => {
+  const handleConfirmRejection = async (e) => {
     e.preventDefault();
-    if (!bookingForm.cargoId || !bookingForm.price) return;
-    setSendingRequest(true);
+    if (!rejectionReason) return;
     try {
-      const selectedCargo = cargoList.find(c => c._id === bookingForm.cargoId);
-      const bookingData = {
-        truckId: selectedTruck._id,
-        truckPlate: selectedTruck.id,
-        truckOwnerId: selectedTruck.ownerId,
-        cargoId: bookingForm.cargoId,
-        cargoTitle: selectedCargo.title,
-        price: bookingForm.price,
+      await logisticsAPI.respondToCargo(rejectingCargoId, { status: 'Rejected', rejectionReason });
+      setRejectingCargoId(null);
+      setRejectionReason('');
+      fetchData();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleAssignConfirm = async (e) => {
+    e.preventDefault();
+    if (!selectedCargoForAssign || !assignPrice) return;
+    try {
+      const truckId = selectedTruckForAssign._id || selectedTruckForAssign.id;
+      const cargoId = selectedCargoForAssign._id || selectedCargoForAssign.id;
+      // Create a booking request for the selected truck and cargo
+      await logisticsAPI.createBooking({
+        truckId: truckId,
+        truckPlate: selectedTruckForAssign.plateNumber,
+        truckOwnerId: selectedTruckForAssign.ownerId,
+        cargoId: cargoId,
+        cargoTitle: selectedCargoForAssign.title,
+        price: assignPrice,
         transporterName: userData.name
-      };
-      await logisticsAPI.createBooking(bookingData);
-      setShowBookingModal(false);
-      setBookingForm({ cargoId: '', price: '' });
+      });
+      // Automatically update the Cargo status to show Truck Assigned
+      await logisticsAPI.updateCargo(cargoId, {
+        status: 'Truck Assigned',
+        assignedTruck: selectedTruckForAssign.plateNumber
+      });
+      setShowAssignModal(false);
+      setAssignPrice('');
+      setSelectedCargoForAssign(null);
+      setSelectedTruckForAssign(null);
       fetchData();
+      alert("Booking request submitted to Truck Owner!");
     } catch (error) {
-      console.error("Error creating booking: ", error);
-    } finally {
-      setSendingRequest(false);
+      console.error("Error creating booking:", error.response?.data || error.message);
+      alert(`Error: ${error.response?.data?.message || error.message}`);
     }
   };
 
-  const handleCounterResponse = async (booking, isAccepted) => {
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatMessageText || !selectedBooking) return;
     try {
-      const status = isAccepted ? 'Accepted' : 'Rejected';
-      await logisticsAPI.updateBooking(booking._id, { status });
+      await logisticsAPI.updateBooking(selectedBooking._id || selectedBooking.id, {
+        $push: { messages: { sender: userData.name, text: chatMessageText } }
+      });
+      setChatMessageText('');
       fetchData();
-    } catch (error) {
-      console.error("Error updating counter offer: ", error);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleSendMessage = async (booking) => {
-    if (!msg) return;
-    try {
-      const newMessages = [...(booking.messages || []), {
-        sender: userData.name,
-        text: msg,
-        time: new Date().toISOString()
-      }];
-      await logisticsAPI.updateBooking(booking._id, { messages: newMessages });
-      setMsg('');
-      fetchData();
-    } catch (e) { console.error(e); }
+  const handleBiltyClick = (booking) => {
+    // Open the bilty preview modal instead of direct download
+    setBiltyModalBooking(booking);
   };
 
-  const handleCancelBooking = async (booking) => {
-    if (!window.confirm("Are you sure you want to cancel this booking request?")) return;
-    try {
-      await logisticsAPI.updateBooking(booking._id, { status: 'Cancelled' });
-      fetchData();
-    } catch (error) {
-      console.error("Error cancelling booking: ", error);
+  const getStatusBadgeStyle = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'IN TRANSIT':
+        return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+      case 'DELIVERED':
+      case 'COMPLETED':
+        return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      case 'LOADED':
+        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      case 'TRUCK ASSIGNED':
+        return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+      case 'PENDING':
+        return 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+      default:
+        return 'bg-gray-500/10 text-gray-400 border border-gray-500/20';
     }
   };
 
-  const pendingCargos = cargoList.filter(c => c.status === 'Pending');
-  const activeShipments = bookings.filter(b => b.status === 'Accepted');
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="w-8 h-8 text-[#00f3ff] animate-spin" />
+        <p className="text-sm text-gray-400 font-semibold tracking-wider">LOADING OPERATOR CENTER...</p>
+      </div>
+    );
+  }
 
-  const mapData = activeShipments.length > 0 && truckLocations[activeShipments[0].truckId]
-    ? { coords: truckLocations[activeShipments[0].truckId], text: `Tracking: ${activeShipments[0].cargoTitle}` }
-    : { coords: [31.5204, 74.3587], text: "No Active Shipments" };
+  const pendingRequests = cargoRequests.filter(c => c.status === 'Pending');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+      {/* Header */}
       <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Transporter Hub</h1>
-          <p className="text-gray-400">Welcome, {userData?.name || 'Transporter'}. Post shipments and find available trucks.</p>
+        <div className="text-left">
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">Cargo Transporter Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-1">Accept corporate shipping requests, coordinate fleet logistics, and dispatch verified drivers.</p>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setShowCargoModal(true)}>
-          <PlusCircle size={18} /> Post Cargo
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="glass-card flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-neon-blue/20 text-neon-blue"><Package size={24} /></div>
-          <div><p className="text-sm text-gray-400">My Cargo</p><p className="text-2xl font-bold text-white">{cargoList.length}</p></div>
-        </div>
-        <div className="glass-card flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-neon-purple/20 text-neon-purple"><Truck size={24} /></div>
-          <div><p className="text-sm text-gray-400">Available Trucks</p><p className="text-2xl font-bold text-white">{availableTrucks.length}</p></div>
-        </div>
-        <div className="glass-card flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-green-500/20 text-green-400"><CheckCircle size={24} /></div>
-          <div><p className="text-sm text-gray-400">Active Bookings</p><p className="text-2xl font-bold text-white">{activeShipments.length}</p></div>
+        <div className="flex gap-2 bg-[#14141e] border border-white/5 px-4 py-2 rounded-xl text-xs text-gray-400 font-mono">
+          <Clock size={14} className="text-[#00f3ff]" />
+          <span>Operations Live: {new Date().toLocaleDateString()}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <div className="glass-card h-[400px] flex flex-col">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Map size={20} className="text-neon-blue" /> Live Tracking</h3>
-          <div className="flex-1 relative rounded-lg overflow-hidden border border-white/5">
-            <MapViewer coordinates={mapData.coords} popupText={mapData.text} color="neon-blue" height="100%" />
-          </div>
-        </div>
+      {/* Tabs navigation */}
+      <div className="border-b border-white/5 mb-8">
+        <nav className="flex gap-8 overflow-x-auto pb-px">
+          {[
+            { id: 'requests', name: 'Requests', badge: pendingRequests.length },
+            { id: 'trucks', name: 'Available Trucks' },
+            { id: 'shipments', name: 'Active Shipments' },
+            { id: 'history', name: 'History' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSelectedBooking(null);
+              }}
+              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 cursor-pointer ${
+                activeTab === tab.id 
+                  ? 'text-[#00f3ff] border-b-2 border-[#00f3ff] font-bold' 
+                  : 'text-gray-400 hover:text-white pb-3'
+              }`}
+            >
+              {tab.name}
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-        <div className="glass-card h-[400px] flex flex-col">
-          <h3 className="text-xl font-bold text-white mb-4">Pending Requests</h3>
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-            {bookings.filter(b => b.status === 'Pending' || b.status === 'Counter-Offered').map(b => (
-              <div key={b._id} className="p-3 rounded bg-white/5 border border-white/10 flex justify-between items-center">
-                <div><p className="text-white font-bold text-sm">{b.cargoTitle}</p><p className="text-[10px] text-gray-400">Truck: {b.truckPlate}</p></div>
-                <div className="text-right">
-                  <p className="text-neon-blue font-bold text-sm">Rs. {b.price}</p>
-                  <p className="text-[10px] text-orange-400">{b.status}</p>
+      {/* Tab Panels */}
+      <div className="space-y-6">
+
+        {/* REQUESTS TAB */}
+        {activeTab === 'requests' && (
+          <div className="space-y-6 text-left">
+            {pendingRequests.map(req => (
+              <div key={req._id} className="bg-[#14141e]/30 border border-white/5 rounded-2xl p-6 space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      REQ-{req.id || req._id.slice(0, 4)} <span className="font-normal text-sm text-gray-400">from {req.businessOwnerName}</span>
+                    </h3>
+                  </div>
+                  <span className="text-xs text-gray-500 font-mono">
+                    {req.createdAt ? new Date(req.createdAt).toLocaleString() : '2026-06-10 08:45'}
+                  </span>
+                </div>
+
+                {/* Details split column layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-sm">
+                  {/* Products */}
+                  <div className="bg-[#0a0a0f]/40 border border-white/5 p-4 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Products</p>
+                    <div className="space-y-1.5 mt-2">
+                      <p className="font-bold text-white text-sm">{req.title}</p>
+                      <p className="text-xs text-amber-500 font-bold">{req.weight} tons</p>
+                      {req.products && req.products.map((p, idx) => (
+                        <p key={idx} className="text-xs text-gray-400">
+                          &middot; {p.name || p.title} ({p.qty} units)
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pickup */}
+                  <div className="bg-[#0a0a0f]/40 border border-white/5 p-4 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Pickup Point</p>
+                    <div className="space-y-1 mt-2 text-xs text-gray-300">
+                      <p className="font-semibold text-white text-sm">{req.origin}</p>
+                      <p><span className="text-gray-500">Address:</span> {req.pickupDetails?.address || 'Gulberg Industrial Area, Lahore'}</p>
+                      <p><span className="text-gray-500">Landmark:</span> {req.pickupDetails?.landmark || 'Near Main Chowk'}</p>
+                      <p><span className="text-gray-500">Contact:</span> {req.pickupDetails?.contactName || 'Ahmed Raza'} ({req.pickupDetails?.phone || '0311-9988776'})</p>
+                    </div>
+                  </div>
+
+                  {/* Recipients */}
+                  <div className="bg-[#0a0a0f]/40 border border-white/5 p-4 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Recipients</p>
+                    <div className="space-y-1 mt-2 text-xs text-gray-300">
+                      <p className="font-semibold text-white text-sm">{req.destination}</p>
+                      {req.recipients && req.recipients.map((r, idx) => (
+                        <div key={idx}>
+                          <p><span className="text-gray-500">To:</span> {r.name} ({r.phone})</p>
+                          <p><span className="text-gray-500">Delivery Address:</span> {r.address}</p>
+                          <p className="text-[#00f3ff] mt-1 font-bold">Deadline: {r.expectedDate ? r.expectedDate.split('T')[0] : '2026-06-14'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accept/Reject triggers */}
+                <div className="flex gap-4 pt-2">
+                  <button 
+                    onClick={() => handleCargoResponse(req._id, 'Accepted')}
+                    className="flex-1 bg-transparent hover:bg-emerald-500/5 border border-emerald-500/35 hover:border-emerald-500 text-emerald-400 font-extrabold py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={16} /> Accept Request
+                  </button>
+                  <button 
+                    onClick={() => handleCargoResponse(req._id, 'Rejected')}
+                    className="flex-1 bg-transparent hover:bg-red-500/5 border border-red-500/35 hover:border-red-500 text-red-400 font-extrabold py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <XCircle size={16} className="shrink-0" /> Reject
+                  </button>
                 </div>
               </div>
             ))}
-            {bookings.filter(b => b.status === 'Pending' || b.status === 'Counter-Offered').length === 0 && <p className="text-gray-400 text-center py-8">No pending requests.</p>}
-          </div>
-        </div>
-      </div>
-      {showCargoModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="glass-card w-full max-w-md relative">
-            <button onClick={() => setShowCargoModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-              <X size={20} />
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-6">Post New Cargo</h2>
-            <form onSubmit={handlePostCargo} className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Cargo Title / Type</label>
-                <input required type="text" value={newCargo.title} onChange={e => setNewCargo({...newCargo, title: e.target.value})} className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white" placeholder="e.g. Textile Goods" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Weight</label>
-                <input required type="text" value={newCargo.weight} onChange={e => setNewCargo({...newCargo, weight: e.target.value})} className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white" placeholder="e.g. 12 Tons" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">Origin</label>
-                  <input required type="text" value={newCargo.origin} onChange={e => setNewCargo({...newCargo, origin: e.target.value})} className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white" placeholder="e.g. Faisalabad" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">Destination</label>
-                  <input required type="text" value={newCargo.destination} onChange={e => setNewCargo({...newCargo, destination: e.target.value})} className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white" placeholder="e.g. Karachi" />
-                </div>
-              </div>
-              <button disabled={addingCargo} type="submit" className="w-full btn-primary flex justify-center items-center mt-4">
-                {addingCargo ? 'Posting...' : 'Post Cargo'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Booking Modal */}
-      {showBookingModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="glass-card w-full max-w-md relative">
-            <button onClick={() => setShowBookingModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-              <X size={20} />
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-2">Request Booking</h2>
-            <p className="text-sm text-gray-400 mb-6">Offering price to truck: {selectedTruck?.id}</p>
-            
-            <form onSubmit={handleBookTruck} className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Select Cargo to Ship</label>
-                <select 
-                  required 
-                  value={bookingForm.cargoId} 
-                  onChange={e => setBookingForm({...bookingForm, cargoId: e.target.value})} 
-                  className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="">-- Choose Pending Cargo --</option>
-                  {pendingCargos.map(c => (
-                    <option key={c._id} value={c._id}>{c.title} ({c.origin} to {c.destination})</option>
-                  ))}
-                </select>
-                {pendingCargos.length === 0 && <p className="text-xs text-orange-400 mt-1">You have no pending cargo. Post cargo first.</p>}
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Offer Price (Rs.)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
-                    <DollarSign size={18} />
-                  </div>
-                  <input required type="number" value={bookingForm.price} onChange={e => setBookingForm({...bookingForm, price: e.target.value})} className="w-full bg-dark-bg border border-white/10 rounded-lg pl-10 pr-3 py-2 text-white" placeholder="e.g. 45000" />
-                </div>
-              </div>
-              
-              <button disabled={sendingRequest || pendingCargos.length === 0} type="submit" className="w-full btn-primary flex justify-center items-center mt-4">
-                {sendingRequest ? 'Sending Request...' : 'Send Booking Offer'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <div className="glass-card mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <DollarSign size={20} className="text-neon-blue" /> {showHistory ? 'Booking History' : 'Negotiations & Booking Status'}
-          </h3>
-          <button 
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-xs text-neon-blue hover:underline"
-          >
-            {showHistory ? 'Show Active' : 'View History'}
-          </button>
-        </div>
-        
-        {(() => {
-          const filteredBookings = showHistory 
-            ? bookings.filter(b => b.status === 'Completed')
-            : bookings.filter(b => b.status !== 'Completed');
-
-          if (filteredBookings.length === 0) {
-            return <p className="text-gray-400 text-center py-4">{showHistory ? 'No history found.' : 'No active booking requests.'}</p>;
-          }
-
-          return (
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-              {filteredBookings.map(booking => (
-                <div key={booking._id} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${booking.status === 'Counter-Offered' ? 'border-neon-purple' : booking.status === 'Accepted' ? 'border-neon-blue' : booking.status === 'Completed' ? 'border-green-500' : 'border-gray-500'}`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <p className="font-bold text-white">{booking.cargoTitle}</p>
-                      <p className="text-sm text-gray-400">Truck: {booking.truckPlate}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-400">Current Price</p>
-                      <p className="text-white font-bold text-lg">Rs. {booking.price}</p>
-                    </div>
-                  </div>
-                  
-                  {booking.status === 'Counter-Offered' ? (
-                    <div className="mt-3 bg-neon-purple/10 p-3 rounded border border-neon-purple/20">
-                      <p className="text-sm text-white mb-3">Truck owner countered with Rs. {booking.price}</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleCounterResponse(booking, true)} className="flex-1 bg-neon-blue text-black font-semibold py-1.5 rounded hover:bg-white transition-colors text-sm">Accept Offer</button>
-                        <button onClick={() => handleCounterResponse(booking, false)} className="flex-1 bg-transparent border border-gray-500 text-gray-300 py-1.5 rounded hover:bg-white/5 transition-colors text-sm">Reject</button>
-                      </div>
-                    </div>
-                  ) : booking.status === 'Pending' ? (
-                    <div className="flex justify-between items-center mt-2">
-                      <p className="text-sm text-orange-400">Waiting for truck owner...</p>
-                      <button onClick={() => handleCancelBooking(booking)} className="text-xs text-red-400 hover:underline">Cancel Request</button>
-                    </div>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-                      <p className="text-xs text-gray-400">Status: <span className={booking.status === 'Accepted' || booking.status === 'Completed' ? 'text-green-400' : 'text-red-400'}>{booking.status}</span></p>
-                      {booking.eta && <p className="text-xs text-neon-blue">ETA: {booking.eta}</p>}
-                      {booking.status === 'Accepted' && (
-                        <>
-                          <button onClick={() => setShowChat(booking._id)} className="w-full mt-2 bg-white/5 border border-white/10 text-[10px] py-1.5 rounded hover:bg-white/10 text-white font-bold transition-colors">Open Chat</button>
-                          {showChat === booking._id && (
-                            <div className="mt-2 p-2 rounded bg-black/40 border border-white/5">
-                              <div className="max-h-24 overflow-y-auto space-y-1 mb-2 pr-1 custom-scrollbar">
-                                {(booking.messages || []).map((m, i) => (
-                                  <div key={i} className={`p-1.5 rounded text-[10px] ${m.sender === userData.name ? 'bg-neon-blue/10 ml-2 border-r border-neon-blue' : 'bg-white/5 mr-2 border-l border-gray-500'}`}>
-                                    <p className="text-gray-300">{m.text}</p>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="flex gap-1">
-                                <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Type..." className="flex-1 bg-dark-bg border border-white/10 rounded px-2 py-1 text-[10px] text-white outline-none" />
-                                <button onClick={() => handleSendMessage(booking)} className="bg-neon-blue text-black px-2 py-1 rounded text-[10px] font-bold">Send</button>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <div className="glass-card">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Search size={20} className="text-neon-blue" /> Find Available Trucks
-          </h3>
-          <div className="relative mb-4">
-            <input 
-              type="text" 
-              placeholder="Search by location..." 
-              className="w-full bg-dark-bg border border-white/10 rounded-lg pl-4 pr-10 py-3 text-white focus:outline-none focus:border-neon-blue transition-colors"
-            />
-            <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-neon-blue">
-              <Search size={18} />
-            </button>
-          </div>
-          
-          <div className="space-y-3 h-[400px] overflow-y-auto pr-2">
-            {availableTrucks.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">No available trucks at the moment.</p>
-            ) : (
-              availableTrucks.map(truck => (
-                <div key={truck._id} className="p-3 rounded-lg bg-white/5 border border-white/5 flex justify-between items-center">
-                  <div>
-                    <p className="text-white font-semibold">{truck.capacity}</p>
-                    <p className="text-xs text-gray-400">Location: {truck.loc} • Plate: {truck.id}</p>
-                  </div>
-                  <button 
-                    onClick={() => { setSelectedTruck(truck); setShowBookingModal(true); }}
-                    className="text-xs font-semibold px-3 py-1 bg-neon-blue/10 text-neon-blue border border-neon-blue rounded hover:bg-neon-blue hover:text-black transition-colors"
-                  >
-                    Request
-                  </button>
-                </div>
-              ))
+            {pendingRequests.length === 0 && (
+              <div className="glass-card text-center py-16 text-gray-500">No incoming shipping requests found.</div>
             )}
           </div>
-        </div>
+        )}
 
-        <div className="glass-card">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Package size={20} className="text-neon-purple" /> My Posted Cargo
-          </h3>
-          {cargoList.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No cargo posted. Click "Post Cargo" to begin.</p>
-          ) : (
-            <div className="space-y-4 h-[400px] overflow-y-auto pr-2">
-              {cargoList.map(cargo => (
-                <div key={cargo._id} className={`p-4 rounded-lg bg-dark-bg border-l-4 ${cargo.status === 'Pending' ? 'border-orange-500' : cargo.status === 'In Transit' ? 'border-neon-blue' : 'border-green-500'} relative overflow-hidden`}>
-                  <div className="flex justify-between items-start mb-2 relative z-10">
-                    <div>
-                      <p className="font-bold text-white">{cargo.title} ({cargo.weight})</p>
-                      <p className="text-sm text-gray-400">{cargo.origin} → {cargo.destination}</p>
+        {/* AVAILABLE TRUCKS TAB */}
+        {activeTab === 'trucks' && (
+          <div className="space-y-6">
+            <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase text-left">Available Trucks Directory</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {availableTrucks.map(truck => (
+                <div key={truck._id} className="bg-[#14141e]/30 border border-white/5 rounded-2xl p-5 text-left flex flex-col justify-between h-[280px]">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <Truck size={20} />
+                      </div>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded-md">
+                        Available
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${cargo.status === 'Pending' ? 'bg-orange-500/20 text-orange-400' : cargo.status === 'In Transit' ? 'bg-neon-blue/20 text-neon-blue' : 'bg-green-500/20 text-green-400'}`}>
-                      {cargo.status}
-                    </span>
+
+                    <h4 className="text-xl font-bold text-white mt-4">{truck.plateNumber}</h4>
+                    <p className="text-xs text-gray-400 mt-1">{truck.truckType} &middot; {truck.capacity}</p>
+
+                    <div className="mt-4 space-y-1 text-xs text-gray-300">
+                      <p><span className="text-gray-500">Owner:</span> <span className="text-white font-semibold">{truck.ownerName}</span></p>
+                      <p><span className="text-gray-500">Driver:</span> <span className="text-white font-semibold">{truck.driverName}</span> <span className="text-gray-500">({truck.driverMobile})</span></p>
+                      <p className="flex items-center gap-1 mt-2 text-gray-400">
+                        <MapPin size={12} className="text-[#00f3ff]" /> {truck.loc}
+                      </p>
+                    </div>
                   </div>
-                  {cargo.status === 'In Transit' && (
-                    <button className="mt-3 flex items-center gap-1 text-xs text-gray-300 hover:text-white transition-colors relative z-10">
-                      <Map size={14} /> Track Location
-                    </button>
-                  )}
+
+                  <button 
+                    onClick={() => {
+                      setSelectedTruckForAssign(truck);
+                      setSelectedCargoForAssign(null);
+                      setAssignPrice('');
+                      setShowAssignModal(true);
+                    }}
+                    className="w-full bg-[#00f3ff]/10 hover:bg-[#00f3ff] border border-[#00f3ff]/20 hover:border-transparent text-[#00f3ff] hover:text-black font-extrabold py-2 rounded-xl text-xs transition-all cursor-pointer mt-4"
+                  >
+                    Assign to Shipment
+                  </button>
                 </div>
               ))}
+              {availableTrucks.length === 0 && (
+                <div className="col-span-3 glass-card text-center py-16 text-gray-500 border border-white/5">No available trucks found. Register or clear trips to free vehicles.</div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* ACTIVE SHIPMENTS TAB */}
+        {activeTab === 'shipments' && (
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase text-left">
+              {bookings.filter(b => b.status !== 'Completed' && b.status !== 'Rejected').length} active transits
+            </h3>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[480px]">
+              {/* Left pane listings */}
+              <div className="lg:col-span-4 bg-[#14141e]/30 border border-white/5 rounded-2xl p-4 overflow-y-auto max-h-[500px] space-y-3">
+                {bookings
+                  .filter(b => b.status !== 'Completed' && b.status !== 'Rejected')
+                  .map(b => (
+                    <div
+                      key={b._id}
+                      onClick={() => setSelectedBooking(b)}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer text-left ${
+                        selectedBooking?._id === b._id 
+                          ? 'bg-[#00f3ff]/5 border-[#00f3ff]/40 shadow-[0_0_15px_rgba(0,243,255,0.05)]' 
+                          : 'bg-[#14141e]/50 border-white/5 hover:border-white/12'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-mono text-xs text-[#00f3ff] font-bold">BLT-{b.cargoId || b._id.slice(0, 4)}</h4>
+                          <h4 className="font-bold text-white text-base mt-1 truncate">{b.cargoTitle}</h4>
+                          <p className="text-xs text-gray-400 mt-1">Truck: {b.truckPlate}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${getStatusBadgeStyle(b.status)}`}>
+                          {b.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                {bookings.filter(b => b.status !== 'Completed' && b.status !== 'Rejected').length === 0 && (
+                  <div className="text-center py-16 text-gray-500 text-sm">No active shipments in progress.</div>
+                )}
+              </div>
+
+              {/* Right details review & chat panel */}
+              <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Details card */}
+                <div className="md:col-span-7 bg-[#14141e]/30 border border-white/5 rounded-2xl p-6 flex flex-col justify-between text-left">
+                  {selectedBooking ? (
+                    <div className="space-y-6 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start border-b border-white/5 pb-4">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{selectedBooking.cargoTitle}</h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Owner ID: USR-{selectedBooking.truckOwnerId} &middot; Plate: <span className="font-mono font-bold text-white">{selectedBooking.truckPlate}</span>
+                            </p>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-gray-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
+                            BLT-{selectedBooking.cargoId || selectedBooking._id.slice(0, 4)}
+                          </span>
+                        </div>
+
+                        {/* Specifications */}
+                        <div className="grid grid-cols-2 gap-4 mt-6 text-xs text-gray-300">
+                          <div>
+                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Route</p>
+                            <p className="font-semibold text-white mt-0.5">
+                              {selectedBooking.cargo?.origin || 'Lahore'} &rarr; {selectedBooking.cargo?.destination || 'Karachi'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Agreed Price</p>
+                            <p className="font-semibold text-emerald-400 mt-0.5">Rs. {selectedBooking.price}</p>
+                          </div>
+                          {selectedBooking.cargo?.weight && (
+                            <div>
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Weight</p>
+                              <p className="font-semibold text-white mt-0.5">{selectedBooking.cargo?.weight} tons</p>
+                            </div>
+                          )}
+                          {selectedBooking.eta && (
+                            <div>
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-wider">ETA</p>
+                              <p className="font-semibold text-amber-400 mt-0.5">{selectedBooking.eta}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Pickup details */}
+                        <div className="mt-6 border-t border-white/5 pt-4 space-y-2">
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-wider">Pickup Address</p>
+                          <div className="bg-[#0a0a0f]/40 border border-white/5 p-3 rounded-xl text-xs text-gray-300">
+                            <p><span className="text-gray-500 font-medium">Point:</span> {selectedBooking.cargo?.pickupDetails?.address || 'Corporate depot'}</p>
+                            <p className="mt-1"><span className="text-gray-500 font-medium">Contact:</span> {selectedBooking.cargo?.pickupDetails?.contactName || '-'} ({selectedBooking.cargo?.pickupDetails?.phone || '-'})</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PDF download */}
+                      <button 
+                        onClick={() => handleBiltyClick(selectedBooking)}
+                        className="w-full bg-[#00f3ff] hover:bg-[#00d7e2] text-black font-extrabold py-2.5 rounded-xl text-sm transition-colors cursor-pointer mt-8 flex justify-center items-center gap-1.5"
+                      >
+                        <FileText size={16} /> Download Digital Bilty
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-3 py-16">
+                      <Package size={36} className="text-gray-600" />
+                      <p className="text-sm font-medium font-sans">Select a shipment to view details</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat pane */}
+                <div className="md:col-span-5 bg-[#14141e]/30 border border-white/5 rounded-2xl p-4 flex flex-col justify-between h-[400px] md:h-full">
+                  {selectedBooking ? (
+                    <div className="flex flex-col justify-between h-full text-left">
+                      <div className="border-b border-white/5 pb-2 mb-3">
+                        <h4 className="text-sm font-bold text-white">Chat with Truck Owner</h4>
+                        <p className="text-[10px] text-gray-500 font-mono mt-0.5">Plate: {selectedBooking.truckPlate}</p>
+                      </div>
+
+                      {/* messages bubble log */}
+                      <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
+                        {(selectedBooking.messages || []).map((m, idx) => {
+                          const isTransporter = m.sender === userData?.name;
+                          return (
+                            <div key={idx} className={`flex ${isTransporter ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`p-2.5 rounded-xl max-w-[85%] text-xs text-left ${
+                                isTransporter 
+                                  ? 'bg-[#00f3ff]/10 text-[#00f3ff] border border-[#00f3ff]/20 rounded-tr-none' 
+                                  : 'bg-white/5 text-gray-300 border border-white/5 rounded-tl-none'
+                              }`}>
+                                <p className="text-[9px] font-bold text-gray-500 mb-0.5">{m.sender}</p>
+                                <p className="leading-relaxed">{m.text}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(selectedBooking.messages || []).length === 0 && (
+                          <div className="flex-1 flex items-center justify-center text-[10px] text-gray-500 italic">No messages exchanged. Type below to text the driver.</div>
+                        )}
+                        <div ref={chatEndRef} />
+                      </div>
+
+                      {/* Chat text input submit */}
+                      <form onSubmit={handleSendMessage} className="flex gap-1.5 border-t border-white/5 pt-3">
+                        <input 
+                          type="text" 
+                          value={chatMessageText}
+                          onChange={e => setChatMessageText(e.target.value)}
+                          placeholder="Type..."
+                          className="flex-1 bg-[#0a0a0f] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-[#00f3ff]"
+                        />
+                        <button 
+                          type="submit"
+                          className="bg-[#00f3ff] hover:bg-[#00d7e2] text-black p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center"
+                        >
+                          <Send size={14} />
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-2">
+                      <MessageSquare size={28} className="text-gray-600" />
+                      <p className="text-xs font-semibold">Select a shipment to chat</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* HISTORY TAB */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            <div className="bg-[#14141e]/30 border border-white/5 rounded-2xl p-6 text-left">
+              <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase mb-6">Delivery History</h3>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-[10px] font-bold text-gray-500 uppercase border-b border-b-white/5">
+                      <th className="pb-3">Shipment ID</th>
+                      <th className="pb-3">Bilty No.</th>
+                      <th className="pb-3">Business Owner</th>
+                      <th className="pb-3">Route</th>
+                      <th className="pb-3">Weight</th>
+                      <th className="pb-3">Date</th>
+                      <th className="pb-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookings
+                      .filter(b => b.status === 'Completed')
+                      .map((b, idx) => (
+                        <tr key={b._id || idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="py-4 font-mono text-gray-500">SHP-{b.cargoId || 10400 + idx}</td>
+                          <td className="py-4">
+                            <button 
+                              onClick={() => handleBiltyClick(b)}
+                              className="font-bold text-amber-400 hover:underline cursor-pointer"
+                            >
+                              BLT-{b.cargoId || 88000 + idx}
+                            </button>
+                          </td>
+                          <td className="py-4 font-bold text-white">{b.cargo?.businessOwnerName || 'Unknown Owner'}</td>
+                          <td className="py-4 text-white">
+                            {b.cargo?.origin || 'Lahore'} &rarr; {b.cargo?.destination || 'Karachi'}
+                          </td>
+                          <td className="py-4 text-gray-400">{b.cargo?.weight || '12.5'} tons</td>
+                          <td className="py-4 text-gray-500">
+                            {b.completedAt ? b.completedAt.split('T')[0] : '2026-06-10'}
+                          </td>
+                          <td className="py-4">
+                            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+                              DELIVERED
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    {bookings.filter(b => b.status === 'Completed').length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="text-center py-12 text-gray-500 italic">No completed delivery history found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
+
+      {/* MODALS */}
+
+      {/* Rejection popup form */}
+      {rejectingCargoId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm px-4">
+          <div className="glass bg-[#14141e] w-full max-w-md relative p-6 rounded-2xl border border-white/10 shadow-2xl">
+            <button onClick={() => { setRejectingCargoId(null); setRejectionReason(''); }} className="absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer">
+              <X size={20} />
+            </button>
+            <h2 className="text-2xl font-bold text-white mb-2 text-left">Reject Shipment Request</h2>
+            <p className="text-xs text-gray-400 mb-6 text-left">Please provide a mandatory reason for rejecting this corporate shipment request.</p>
+            <form onSubmit={handleConfirmRejection} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Rejection Reason *</label>
+                <textarea 
+                  required 
+                  value={rejectionReason} 
+                  onChange={e => setRejectionReason(e.target.value)} 
+                  className="w-full bg-[#0a0a0f] border border-white/10 rounded-xl px-3 py-2 text-white h-24 text-sm outline-none focus:border-red-500" 
+                  placeholder="e.g. Schedule conflict or route unavailable. We cannot dispatch vehicles to this route next week." 
+                />
+              </div>
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-sm transition-colors cursor-pointer">
+                Confirm Rejection
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Truck popup form */}
+      {showAssignModal && selectedTruckForAssign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm px-4">
+          <div className="glass bg-[#14141e] w-full max-w-md relative p-6 rounded-2xl border border-white/10 shadow-2xl">
+            <button onClick={() => setShowAssignModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer">
+              <X size={20} />
+            </button>
+            <h2 className="text-2xl font-bold text-white mb-2 text-left">Assign Truck to Shipment</h2>
+            <p className="text-xs text-gray-400 mb-6 text-left">Select an accepted cargo shipment request to assign vehicle <span className="text-[#00f3ff] font-bold">{selectedTruckForAssign.plateNumber}</span>.</p>
+            <form onSubmit={handleAssignConfirm} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Select Accepted Shipment *</label>
+                <select 
+                  required
+                  onChange={e => setSelectedCargoForAssign(cargoRequests.find(c => Number(c._id) === Number(e.target.value)))}
+                  className="w-full bg-[#0a0a0f] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-[#00f3ff]">
+                  <option value="">-- Choose Cargo --</option>
+                  {cargoRequests
+                    .filter(c => c.status === 'Accepted')
+                    .map(c => (
+                      <option key={c._id} value={String(c._id)}>
+                        {c.title} ({c.weight} tons) &rarr; {c.destination}
+                      </option>
+                    ))}
+                </select>
+                {cargoRequests.filter(c => c.status === 'Accepted').length === 0 && (
+                  <p className="text-[10px] text-orange-400 mt-1">No accepted shipments are available. Accept requests first.</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Agreed Price (PKR) *</label>
+                <input 
+                  required
+                  type="number"
+                  value={assignPrice}
+                  onChange={e => setAssignPrice(e.target.value)}
+                  placeholder="e.g. 75000"
+                  className="w-full bg-[#0a0a0f] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-[#00f3ff]"
+                />
+              </div>
+              <button 
+                type="submit" 
+                disabled={!assignPrice || !selectedCargoForAssign}
+                className="w-full bg-[#00f3ff] hover:bg-[#00d7e2] disabled:opacity-50 text-black font-extrabold py-2.5 rounded-xl text-sm transition-colors cursor-pointer mt-4"
+              >
+                Confirm Assignment & Request
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bilty PDF Preview Modal */}
+      <BiltyModal
+        booking={biltyModalBooking}
+        onClose={() => setBiltyModalBooking(null)}
+      />
+
     </div>
   );
 }

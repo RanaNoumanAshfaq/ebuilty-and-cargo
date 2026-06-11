@@ -26,8 +26,26 @@ const User = sequelize.define('User', {
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('pending', 'active', 'blocked', 'pending_verification'),
+    type: DataTypes.ENUM('pending', 'active', 'blocked', 'pending_verification', 'rejected'),
     defaultValue: 'pending'
+  },
+  cnic: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  businessName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'business_name'
+  },
+  businessRegNumber: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'business_reg_number'
   },
   documents: {
     type: DataTypes.JSON, // stored as JSON array

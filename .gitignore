@@ -33,3 +33,4 @@ dist-ssr
 # Server
 server/node_modules
 server/.env
+server/uploads/

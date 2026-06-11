@@ -9,6 +9,10 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [role, setRole] = useState('truck_owner');
+  const [cnic, setCnic] = useState('');
+  const [phone, setPhone] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [businessRegNumber, setBusinessRegNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
@@ -24,7 +28,7 @@ export default function Register() {
     try {
       setError('');
       setLoading(true);
-      await signup(email, password, role, name);
+      await signup(email, password, role, name, cnic, phone, businessName, businessRegNumber);
       // After registration, redirect to home or a waiting page if approval needed
       navigate('/');
     } catch (err) {
@@ -105,6 +109,58 @@ export default function Register() {
               </select>
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">CNIC Number</label>
+            <input
+              type="text"
+              required
+              className="block w-full px-3 py-2 bg-dark-card/50 border border-white/10 rounded-lg focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder-gray-500 transition-colors"
+              placeholder="34101-XXXXXXX-X"
+              value={cnic}
+              onChange={(e) => setCnic(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Phone Number</label>
+            <input
+              type="text"
+              required
+              className="block w-full px-3 py-2 bg-dark-card/50 border border-white/10 rounded-lg focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder-gray-500 transition-colors"
+              placeholder="+92 300 XXXXXXX"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+
+          {(role === 'business' || role === 'transporter') && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Business Name</label>
+                <input
+                  type="text"
+                  required
+                  className="block w-full px-3 py-2 bg-dark-card/50 border border-white/10 rounded-lg focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder-gray-500 transition-colors"
+                  placeholder="ACME Corp"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Business NTN / Registration Number</label>
+                <input
+                  type="text"
+                  required
+                  className="block w-full px-3 py-2 bg-dark-card/50 border border-white/10 rounded-lg focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder-gray-500 transition-colors"
+                  placeholder="NTN-1234567-8"
+                  value={businessRegNumber}
+                  onChange={(e) => setBusinessRegNumber(e.target.value)}
+                />
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

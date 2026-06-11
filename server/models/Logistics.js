@@ -22,6 +22,31 @@ const Truck = sequelize.define('Truck', {
     type: DataTypes.ENUM('Available', 'In Transit', 'Maintenance'),
     defaultValue: 'Available'
   },
+  truckType: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'truck_type'
+  },
+  driverName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'driver_name'
+  },
+  driverMobile: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'driver_mobile'
+  },
+  fitnessDoc: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'fitness_doc'
+  },
+  insuranceDoc: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'insurance_doc'
+  },
   lat: { type: DataTypes.FLOAT, defaultValue: 31.5204 },
   lng: { type: DataTypes.FLOAT, defaultValue: 74.3587 }
 }, {
@@ -40,13 +65,37 @@ const Cargo = sequelize.define('Cargo', {
   destination: { type: DataTypes.STRING, allowNull: false },
   transporterId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     field: 'transporter_id',
     references: { model: User, key: 'id' }
   },
+  businessOwnerId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'business_owner_id',
+    references: { model: User, key: 'id' }
+  },
   status: {
-    type: DataTypes.ENUM('Pending', 'In Transit', 'Completed'),
+    type: DataTypes.ENUM('Draft', 'Pending', 'Accepted', 'Truck Assigned', 'Loaded', 'In Transit', 'Delivered', 'Completed'),
     defaultValue: 'Pending'
+  },
+  products: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  pickupDetails: {
+    type: DataTypes.JSON,
+    defaultValue: {},
+    field: 'pickup_details'
+  },
+  recipients: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  rejectionReason: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'rejection_reason'
   },
   assignedTruck: { type: DataTypes.STRING, field: 'assigned_truck' }
 }, {
@@ -74,7 +123,7 @@ const Booking = sequelize.define('Booking', {
   },
   cargoId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     field: 'cargo_id',
     references: { model: Cargo, key: 'id' }
   },
@@ -88,10 +137,11 @@ const Booking = sequelize.define('Booking', {
   transporterName: { type: DataTypes.STRING, allowNull: false, field: 'transporter_name' },
   price: { type: DataTypes.STRING, allowNull: false },
   status: {
-    type: DataTypes.ENUM('Pending', 'Accepted', 'Rejected', 'Counter-Offered', 'Completed', 'Cancelled'),
+    type: DataTypes.ENUM('Pending', 'Accepted', 'Rejected', 'Counter-Offered', 'In Transit', 'Loaded', 'Completed', 'Cancelled'),
     defaultValue: 'Pending'
   },
   eta: { type: DataTypes.STRING },
+  pod: { type: DataTypes.TEXT, allowNull: true },
   completedAt: { type: DataTypes.DATE, field: 'completed_at' }
 }, {
   tableName: 'bookings',
@@ -167,8 +217,14 @@ Truck.belongsTo(User, { foreignKey: 'owner_id', as: 'owner' });
 User.hasMany(Cargo, { foreignKey: 'transporter_id' });
 Cargo.belongsTo(User, { foreignKey: 'transporter_id', as: 'transporter' });
 
+User.hasMany(Cargo, { foreignKey: 'business_owner_id' });
+Cargo.belongsTo(User, { foreignKey: 'business_owner_id', as: 'businessOwner' });
+
 Booking.hasMany(BookingMessage, { foreignKey: 'booking_id', as: 'messages' });
 BookingMessage.belongsTo(Booking, { foreignKey: 'booking_id' });
+
+Booking.belongsTo(Cargo, { foreignKey: 'cargo_id', as: 'cargo' });
+Cargo.hasMany(Booking, { foreignKey: 'cargo_id' });
 
 User.hasMany(Notification, { foreignKey: 'user_id' });
 User.hasMany(Complaint, { foreignKey: 'user_id' });
