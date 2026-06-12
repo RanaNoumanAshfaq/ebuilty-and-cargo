@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 344 of 700
+Day of Week:   Friday
+Date & Time:   2026-06-12 20:11:19 +0500
+Module Scope:  ANALYTICS - Logistics KPI & Analytics Dashboard
+Commit Title:  analytics: [2026-06-12] Display active vehicle capacity utilization across provincial trade corridors
+
+CHANGES ON THIS DATE (Friday, 2026-06-12):
+• Display active vehicle capacity utilization across provincial trade corridors
+• Component: src/analytics / server/modules/analytics
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
