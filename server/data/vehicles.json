@@ -1,0 +1,90 @@
+[
+  {
+    "_id": "c_corolla_gli",
+    "name": "Toyota Corolla GLI",
+    "model": "GLI 2015",
+    "category": "Economy",
+    "pricePerDay": 8000,
+    "images": [
+      "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?q=80&w=600&auto=format&fit=crop"
+    ],
+    "transmission": "Automatic",
+    "fuelEconomy": "12 km/L",
+    "capacity": 4,
+    "features": [
+      "AC",
+      "Airbags",
+      "Bluetooth",
+      "Comfort Seats"
+    ],
+    "isAvailable": true,
+    "driverIncluded": true,
+    "luxuryBadge": false
+  },
+  {
+    "_id": "c_corolla_grande",
+    "name": "Toyota Corolla Grande",
+    "model": "Grande 2022",
+    "category": "Sedan",
+    "pricePerDay": 15000,
+    "images": [
+      "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?q=80&w=600&auto=format&fit=crop"
+    ],
+    "transmission": "Automatic",
+    "fuelEconomy": "13 km/L",
+    "capacity": 5,
+    "features": [
+      "AC",
+      "Sunroof",
+      "Leather Interior",
+      "Cruise Control"
+    ],
+    "isAvailable": true,
+    "driverIncluded": true,
+    "luxuryBadge": false
+  },
+  {
+    "_id": "c_prado",
+    "name": "Toyota Prado TX L",
+    "model": "Prado 2018",
+    "category": "SUV",
+    "pricePerDay": 35000,
+    "images": [
+      "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=600&auto=format&fit=crop"
+    ],
+    "transmission": "Automatic",
+    "fuelEconomy": "8 km/L",
+    "capacity": 7,
+    "features": [
+      "AC",
+      "Panoramic Sunroof",
+      "Heated Seats",
+      "4x4 Drive Mode"
+    ],
+    "isAvailable": true,
+    "driverIncluded": true,
+    "luxuryBadge": true
+  },
+  {
+    "_id": "c_hiace",
+    "name": "Toyota Hiace Grand Cabin",
+    "model": "Hiace 2020",
+    "category": "Van",
+    "pricePerDay": 22000,
+    "images": [
+      "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?q=80&w=600&auto=format&fit=crop"
+    ],
+    "transmission": "Manual",
+    "fuelEconomy": "10 km/L",
+    "capacity": 14,
+    "features": [
+      "AC",
+      "High Roof",
+      "Reclining Seats",
+      "LED TV Screen"
+    ],
+    "isAvailable": true,
+    "driverIncluded": true,
+    "luxuryBadge": false
+  }
+]

@@ -1,94 +1,56 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { FaBars } from "react-icons/fa";
+import { NavLink } from "react-router-dom";
 
 function Navbar() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const baseStyle = {
+    color: "white",
+    textDecoration: "none",
+    fontSize: "16px",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    transition: "0.3s",
+  };
+
+  const activeStyle = {
+    background: "rgba(56, 189, 248, 0.2)",
+    color: "#38bdf8",
+    fontWeight: "bold",
+  };
 
   return (
     <nav
       style={{
-        background: "#0f172a",
-        color: "white",
-        padding: "18px 25px",
-        position: "fixed",
-        width: "100%",
-        top: "0",
-        zIndex: "1000",
+        background: "rgba(15, 23, 42, 0.9)",
+        backdropFilter: "blur(10px)",
+        padding: "18px 40px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        position: "sticky",
+        top: 0,
+        zIndex: 1000,
+        borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}
     >
-      {/* Top Row */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: "26px",
-            fontWeight: "bold",
-          }}
-        >
-          KHAN TOURISM & GUIDE
-        </h2>
+      <h2 style={{ margin: 0, color: "white" }}>KHAN TOURISM</h2>
 
-        {/* Mobile Icon */}
-        <div
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={{
-            fontSize: "26px",
-            cursor: "pointer",
-          }}
-        >
-          <FaBars />
-        </div>
+      <div style={{ display: "flex", gap: "15px" }}>
+        {["/", "/cars", "/tours", "/contact"].map((path, i) => {
+          const labels = ["Home", "Cars", "Tours", "Contact"];
+          return (
+            <NavLink
+              key={i}
+              to={path}
+              style={({ isActive }) =>
+                isActive
+                  ? { ...baseStyle, ...activeStyle }
+                  : baseStyle
+              }
+            >
+              {labels[i]}
+            </NavLink>
+          );
+        })}
       </div>
-
-      {/* Menu */}
-      {menuOpen && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "18px",
-            marginTop: "20px",
-          }}
-        >
-          <Link to="/" style={linkStyle}>
-            Home
-          </Link>
-
-          <Link to="/cars" style={linkStyle}>
-            Cars
-          </Link>
-
-          <Link to="/tours" style={linkStyle}>
-            Tours
-          </Link>
-
-          <Link to="/airport" style={linkStyle}>
-            Airport Pickup
-          </Link>
-
-          <Link to="/contact" style={linkStyle}>
-            Contact
-          </Link>
-
-          <Link to="/admin" style={linkStyle}>
-            Admin
-          </Link>
-        </div>
-      )}
     </nav>
   );
 }
-
-const linkStyle = {
-  color: "white",
-  textDecoration: "none",
-  fontSize: "18px",
-};
-
-export default Navbar;

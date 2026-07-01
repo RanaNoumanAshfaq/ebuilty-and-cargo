@@ -1,0 +1,35 @@
+[
+  {
+    "_id": "b_01",
+    "user": "u_test",
+    "type": "Car",
+    "itemName": "Toyota Corolla Grande",
+    "startDate": "2026-07-10",
+    "endDate": "2026-07-15",
+    "totalDays": 5,
+    "totalPrice": 75000,
+    "timelineStatus": "Booking Confirmed",
+    "details": {
+      "peopleCount": 4,
+      "driverName": "Karamat Shah",
+      "driverPhone": "0301-7654321",
+      "driverPhoto": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "driverVehicleNo": "ICT-LE-392"
+    },
+    "createdAt": "2026-06-28T20:56:56.604Z"
+  },
+  {
+    "_id": "b_02",
+    "user": "u_test",
+    "type": "Tour",
+    "itemName": "Hunza Valley Autumn Luxury Tour",
+    "startDate": "2026-09-12",
+    "totalDays": 5,
+    "totalPrice": 95000,
+    "timelineStatus": "Quotation Sent",
+    "details": {
+      "peopleCount": 2
+    },
+    "createdAt": "2026-06-28T20:56:56.604Z"
+  }
+]

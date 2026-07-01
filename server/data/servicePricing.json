@@ -1,0 +1,15 @@
+{
+  "airportPickupBase": 3500,
+  "perKmRate": 45,
+  "nightSurcharge": 1500,
+  "waitingChargePerHour": 800,
+  "fuelPricePerLiter": 275,
+  "driverDailyAllowance": 2500,
+  "taxPercentage": 5,
+  "cancelationFeePercentage": 15,
+  "peakSeasonMultiplier": 1.3,
+  "groupDiscountPercentage": 10,
+  "loyaltyDiscountPercentage": 5,
+  "updatedAt": "2026-06-29T00:00:00.000Z",
+  "updatedBy": "admin@khantourism.com"
+}

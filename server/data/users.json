@@ -1,0 +1,26 @@
+[
+  {
+    "_id": "u_admin",
+    "name": "Abdullah Khan",
+    "email": "admin@khantourism.com",
+    "password": "$2b$10$pZpFQ8dBSqYL9ClAF7P2gewioLgQM63JhdQ705qvfXdPL813FIQUa",
+    "role": "admin",
+    "phone": "0336-5004848",
+    "verificationStatus": "verified",
+    "savedTours": [],
+    "savedCars": [],
+    "createdAt": "2026-06-28T20:56:56.598Z"
+  },
+  {
+    "_id": "u_test",
+    "name": "Rana Nouman",
+    "email": "user@gmail.com",
+    "password": "$2b$10$pZpFQ8dBSqYL9ClAF7P2getZ8e7fbFFd102QzHXFA.9EcGC7t7VJq",
+    "role": "user",
+    "phone": "0311-5353751",
+    "verificationStatus": "verified",
+    "savedTours": [],
+    "savedCars": [],
+    "createdAt": "2026-06-28T20:56:56.599Z"
+  }
+]
