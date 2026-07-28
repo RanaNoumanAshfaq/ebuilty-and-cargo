@@ -1,0 +1,15 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Commit Number: 674 of 1002
+Day of Week:   Tuesday
+Date & Time:   2026-07-28 11:33:31
+Module Scope:  AUTH - Auth, Security & Compliance
+Commit Title:  auth: [2026-07-28] Validate user email uniqueness and format during registration flow
+
+CHANGES ON THIS DATE (Tuesday, 2026-07-28):
+• Validate user email uniqueness and format during registration flow
+• Component: src/auth / server/modules/auth
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
