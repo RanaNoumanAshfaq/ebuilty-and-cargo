@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 526 of 700
+Day of Week:   Friday
+Date & Time:   2026-08-21 10:37:48 +0500
+Module Scope:  PAYMENTS - Freight Fare & Ledger Reconciliation
+Commit Title:  payments: [2026-08-21] Add bank transfer IBAN validation and proof slip screenshot attachment
+
+CHANGES ON THIS DATE (Friday, 2026-08-21):
+• Add bank transfer IBAN validation and proof slip screenshot attachment
+• Component: src/payments / server/modules/payments
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
