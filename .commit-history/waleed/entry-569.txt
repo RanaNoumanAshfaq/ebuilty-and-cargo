@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 569 of 700
+Day of Week:   Tuesday
+Date & Time:   2026-09-01 10:26:39 +0500
+Module Scope:  CARGO - Cargo Logistics & Dispatch
+Commit Title:  cargo: [2026-09-01] Implement volumetric weight calculator using standard formula (L x W x H / 5000)
+
+CHANGES ON THIS DATE (Tuesday, 2026-09-01):
+• Implement volumetric weight calculator using standard formula (L x W x H / 5000)
+• Component: src/cargo / server/modules/cargo
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
