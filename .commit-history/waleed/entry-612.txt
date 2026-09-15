@@ -1,0 +1,16 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Contributor:   waleedahmed-dot <46202@students.riphah.edu.pk>
+Commit Number: 612 of 700
+Day of Week:   Tuesday
+Date & Time:   2026-09-15 22:18:42 +0500
+Module Scope:  WHATSAPP - WhatsApp Automation Service
+Commit Title:  whatsapp: [2026-09-15] Retry failed WhatsApp dispatch messages with exponential jitter backoff
+
+CHANGES ON THIS DATE (Tuesday, 2026-09-15):
+• Retry failed WhatsApp dispatch messages with exponential jitter backoff
+• Component: src/whatsapp / server/modules/whatsapp
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
