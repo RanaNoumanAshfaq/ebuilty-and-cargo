@@ -1,0 +1,420 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-primary-bg: #F0F9FF;
+  --color-secondary-bg: #FFFFFF;
+  --color-dark-panel: #F8FAFC;
+  --color-border-dark: #E2E8F0;
+  --color-border-subtle: #CBD5E1;
+  
+  /* Peacock & Khyber Truck Art Palette (Matched to User Image) */
+  --color-peacock-cyan: #0284C7;
+  --color-peacock-teal: #0891B2;
+  --color-peacock-sky: #38BDF8;
+  --color-truck-purple: #7C3AED;
+  --color-truck-violet: #8B5CF6;
+  --color-truck-green: #10B981;
+  --color-truck-lime: #84CC16;
+  --color-truck-yellow: #FACC15;
+  --color-saffron: #F59E0B;
+  --color-truck-red: #E11D48;
+  --color-reflective-white: #FFFFFF;
+  
+  /* Backward-compatible aliases tuned to Peacock Truck Art palette */
+  --color-neon-blue: #0284C7;
+  --color-neon-purple: #7C3AED;
+  --color-dark-bg: #F0F9FF;
+  --color-dark-card: #FFFFFF;
+  
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-urdu: 'Noto Nastaliq Urdu', 'Amiri', serif;
+}
+
+@layer base {
+  body {
+    background-color: #F0F9FF;
+    color: #0F172A;
+    font-family: var(--font-sans);
+    margin: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body.lang-ur {
+    font-family: var(--font-urdu), var(--font-sans);
+  }
+
+  ::selection {
+    background-color: #BAE6FD;
+    color: #0369A1;
+  }
+}
+
+@layer utilities {
+  /* Elegant light glass panel with warm border */
+  /* Crisp solid white card panel without blur */
+  .glass {
+    background-color: #FFFFFF;
+    backdrop-filter: none;
+    border: 1px solid #BAE6FD;
+    box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.08);
+  }
+  
+  /* Elevated Truck-Art card in crisp white with peacock cyan border */
+  .glass-card {
+    background-color: #FFFFFF;
+    border: 1px solid #BAE6FD;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  
+  .glass-card:hover {
+    border-color: #0284C7;
+    box-shadow: 0 12px 28px -6px rgba(2, 132, 199, 0.15), 0 0 12px rgba(124, 58, 237, 0.15);
+    transform: translateY(-2px);
+  }
+
+  /* Warm parchment sub-panel for inner forms and widgets */
+  .panel-dark {
+    background-color: #FAF7EE;
+    border: 1px solid #E5E7EB;
+    border-radius: 0.75rem;
+  }
+
+  /* Primary Button (Vibrant Golden Amber / Saffron) */
+  /* Primary Button (Peacock Cyan & Royal Purple Gradient) */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.625rem;
+    background: linear-gradient(135deg, #0284C7 0%, #0369A1 45%, #7C3AED 100%);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: 0.015em;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.35);
+  }
+  
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 45%, #8B5CF6 100%);
+    box-shadow: 0 4px 18px rgba(124, 58, 237, 0.45);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  /* Outline Button (Peacock Cyan border) */
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.625rem;
+    border: 1.5px solid #0284C7;
+    background: #FFFFFF;
+    color: #0284C7;
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: 0.015em;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(2, 132, 199, 0.1);
+  }
+
+  .btn-outline:hover {
+    background: #F0F9FF;
+    border-color: #7C3AED;
+    color: #7C3AED;
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .btn-outline:active {
+    transform: scale(0.98);
+  }
+
+  /* Purple / Violet Accent Button */
+  .btn-crimson {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.625rem;
+    background: linear-gradient(135deg, #7C3AED 0%, #0284C7 100%);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.35);
+  }
+  .btn-crimson:hover {
+    box-shadow: 0 4px 18px rgba(124, 58, 237, 0.5);
+    transform: translateY(-1px);
+  }
+
+  /* Urdu Inscription typography */
+  .font-urdu {
+    font-family: var(--font-urdu);
+    direction: rtl;
+  }
+
+  /* Telemetry / Mono numerical display */
+  .font-telemetry {
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ==========================================================================
+   CHAMAK PATTI RIBBONS & PEACOCK TRUCK ART STYLING
+   ========================================================================== */
+
+/* Full Peacock & Truck Art repeating reflective chevron ribbon */
+.chamak-ribbon {
+  height: 5px;
+  width: 100%;
+  background: repeating-linear-gradient(
+    135deg,
+    #7C3AED 0px,
+    #7C3AED 12px,
+    #0284C7 12px,
+    #0284C7 24px,
+    #10B981 24px,
+    #10B981 36px,
+    #FACC15 36px,
+    #FACC15 48px,
+    #E11D48 48px,
+    #E11D48 58px,
+    #FFFFFF 58px,
+    #FFFFFF 64px
+  );
+  box-shadow: 0 1px 8px rgba(2, 132, 199, 0.25), 0 1px 4px rgba(124, 58, 237, 0.2);
+}
+
+.chamak-ribbon-slim {
+  height: 3px;
+  width: 100%;
+  background: repeating-linear-gradient(
+    135deg,
+    #7C3AED 0px,
+    #7C3AED 8px,
+    #0284C7 8px,
+    #0284C7 16px,
+    #10B981 16px,
+    #10B981 24px,
+    #FACC15 24px,
+    #FACC15 32px,
+    #E11D48 32px,
+    #E11D48 38px
+  );
+  opacity: 0.95;
+}
+
+/* Vertical Peacock Chamak Patti accent */
+.chamak-bar-left {
+  position: relative;
+}
+.chamak-bar-left::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  background: repeating-linear-gradient(
+    180deg,
+    #7C3AED 0px,
+    #7C3AED 12px,
+    #0284C7 12px,
+    #0284C7 24px,
+    #10B981 24px,
+    #10B981 36px,
+    #FACC15 36px,
+    #FACC15 48px,
+    #E11D48 48px,
+    #E11D48 58px
+  );
+  border-top-left-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+
+/* Signature Peacock Cyan & Royal Violet Truck Art Gradients */
+.signature-gradient-text {
+  background: linear-gradient(135deg, #0284C7 0%, #7C3AED 50%, #E11D48 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.signature-gradient-bg {
+  background: linear-gradient(135deg, #0284C7 0%, #7C3AED 50%, #F59E0B 100%);
+}
+
+.signature-tab-active {
+  background: linear-gradient(135deg, #0284C7 0%, #7C3AED 100%);
+  color: #FFFFFF !important;
+  font-weight: 800;
+  box-shadow: 0 3px 12px rgba(2, 132, 199, 0.35);
+}
+
+/* ==========================================================================
+   STATUS BADGES - SINDHI & TRUCK PALETTE
+   ========================================================================== */
+
+.badge-in-transit {
+  background-color: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.badge-delayed {
+  background-color: #FFFBEB;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+
+.badge-alert {
+  background-color: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
+}
+
+.badge-at-depot {
+  background-color: #F0F9FF;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+}
+
+.badge-idle {
+  background-color: #F8FAFC;
+  color: #475569;
+  border: 1px solid #E2E8F0;
+}
+
+.badge-delivered {
+  background-color: #FAF5FF;
+  color: #6B21A8;
+  border: 1px solid #E9D5FF;
+}
+
+/* ==========================================================================
+   LEAFLET GPS MAP LIGHT THEME
+   ========================================================================== */
+.leaflet-container {
+  background: #F1F5F9;
+  font-family: var(--font-sans);
+}
+
+.leaflet-popup-content-wrapper {
+  background: #FFFFFF;
+  color: #0F172A;
+  border: 1.5px solid #F59E0B;
+  border-radius: 10px;
+  box-shadow: 0 8px 25px rgba(185, 28, 28, 0.15);
+  padding: 0;
+}
+
+.leaflet-popup-tip {
+  background: #FFFFFF;
+  border: 1.5px solid #F59E0B;
+}
+
+.custom-leaflet-icon {
+  background: transparent;
+  border: none;
+}
+
+/* ==========================================================================
+   LIGHT SINDHI & KPK TRUCK ART UNIVERSAL ADAPTER
+   Transforms legacy dark classes to illuminated warm white & saffron palette
+   ========================================================================== */
+
+/* Main cards, panels, and modal containers */
+.bg-\[\#0B101D\] {
+  background-color: #FFFFFF !important;
+  border-color: #FDE68A !important;
+  box-shadow: 0 4px 20px -2px rgba(185, 28, 28, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Sub-panels, form containers, inner item cards */
+.bg-\[\#0F1626\] {
+  background-color: #FAF7EE !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Deep sub-containers */
+.bg-\[\#070A11\] {
+  background-color: #F8F6F0 !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* All borders */
+.border-\[\#1E293B\] {
+  border-color: #E2E8F0 !important;
+}
+
+/* Main headings */
+.text-\[\#FDFFFC\] {
+  color: #0F172A !important;
+}
+
+/* Subdued texts inside light panels */
+.bg-\[\#0B101D\] .text-slate-400,
+.bg-\[\#0F1626\] .text-slate-400 {
+  color: #64748B !important;
+}
+
+.bg-\[\#0B101D\] .text-slate-300,
+.bg-\[\#0F1626\] .text-slate-300 {
+  color: #334155 !important;
+}
+
+/* Inputs, textareas, and selects inside dashboard panels */
+.bg-\[\#0B101D\] input:not([type="checkbox"]):not([type="radio"]),
+.bg-\[\#0B101D\] textarea,
+.bg-\[\#0B101D\] select,
+.bg-\[\#0F1626\] input:not([type="checkbox"]):not([type="radio"]),
+.bg-\[\#0F1626\] textarea,
+.bg-\[\#0F1626\] select {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+.bg-\[\#0B101D\] input::placeholder,
+.bg-\[\#0B101D\] textarea::placeholder,
+.bg-\[\#0F1626\] input::placeholder,
+.bg-\[\#0F1626\] textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Table styling inside light panels */
+.bg-\[\#0B101D\] table th,
+.bg-\[\#0F1626\] table th {
+  background-color: #FEF3C7 !important;
+  color: #78350F !important;
+  border-bottom: 2px solid #FDE68A !important;
+}
+
+.bg-\[\#0B101D\] table td,
+.bg-\[\#0F1626\] table td {
+  color: #1E293B !important;
+  border-bottom: 1px solid #F1F5F9 !important;
+}
+
+.bg-\[\#0B101D\] table tr:hover,
+.bg-\[\#0F1626\] table tr:hover {
+  background-color: rgba(254, 243, 199, 0.4) !important;
+}
+
