@@ -29,25 +29,40 @@ export default function BiltyModal({ booking, onClose }) {
     origin: b.origin || b.cargo?.origin,
     destination: b.destination || b.cargo?.destination,
     weight: b.weight || b.cargo?.weight,
+    businessOwnerName: b.cargo?.businessOwnerName || b.businessOwnerName,
+    packagingType: b.cargo?.packagingType || b.packagingType,
+    paymentTerms: b.cargo?.paymentTerms || b.paymentTerms,
+    specialHandling: b.cargo?.specialHandling || b.specialHandling,
+    senderNTN: b.cargo?.senderNTN || b.senderNTN,
+    deliveryNotes: b.cargo?.deliveryNotes || b.deliveryNotes,
+    chargeableWeight: b.cargo?.chargeableWeight || b.chargeableWeight,
+    receiverSignature: b.receiverSignature,
   });
 
   useEffect(() => {
     if (!booking) return;
     setLoading(true);
     setError(null);
+    let active = true;
 
-    try {
-      const url = generateBiltyPDFBlob(getBiltyData(booking));
-      urlRef.current = url;
-      setPdfUrl(url);
-      setLoading(false);
-    } catch (err) {
-      console.error('BiltyModal PDF error:', err);
-      setError(err.message || 'Failed to generate PDF.');
-      setLoading(false);
-    }
+    generateBiltyPDFBlob(getBiltyData(booking))
+      .then((url) => {
+        if (active) {
+          urlRef.current = url;
+          setPdfUrl(url);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          console.error('BiltyModal PDF error:', err);
+          setError(err.message || 'Failed to generate PDF.');
+          setLoading(false);
+        }
+      });
 
     return () => {
+      active = false;
       // Revoke blob URL on unmount / booking change
       if (urlRef.current) {
         URL.revokeObjectURL(urlRef.current);

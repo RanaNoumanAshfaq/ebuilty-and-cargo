@@ -36,3 +36,6 @@ server/.env
 server/uploads/
 *.sqlite
 server/*.sqlite
+server/.wwebjs_auth/
+server/.wwebjs_cache/
+

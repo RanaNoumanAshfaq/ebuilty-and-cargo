@@ -97,7 +97,20 @@ const Cargo = sequelize.define('Cargo', {
     allowNull: true,
     field: 'rejection_reason'
   },
-  assignedTruck: { type: DataTypes.STRING, field: 'assigned_truck' }
+  assignedTruck: { type: DataTypes.STRING, field: 'assigned_truck' },
+  packagingType: { type: DataTypes.STRING, allowNull: true, field: 'packaging_type' },
+  dimensions: { type: DataTypes.JSON, defaultValue: {}, field: 'dimensions' },
+  specialHandling: { type: DataTypes.JSON, defaultValue: [], field: 'special_handling' },
+  declaredValue: { type: DataTypes.STRING, allowNull: true, field: 'declared_value' },
+  paymentTerms: { type: DataTypes.STRING, defaultValue: 'Prepaid', field: 'payment_terms' },
+  senderNTN: { type: DataTypes.STRING, allowNull: true, field: 'sender_ntn' },
+  deliveryNotes: { type: DataTypes.TEXT, allowNull: true, field: 'delivery_notes' },
+  chargeableWeight: { type: DataTypes.STRING, allowNull: true, field: 'chargeable_weight' },
+  volumetricWeight: { type: DataTypes.STRING, allowNull: true, field: 'volumetric_weight' },
+  baseFare: { type: DataTypes.FLOAT, allowNull: true, field: 'base_fare' },
+  fuelSurcharge: { type: DataTypes.FLOAT, allowNull: true, field: 'fuel_surcharge' },
+  taxAmount: { type: DataTypes.FLOAT, allowNull: true, field: 'tax_amount' },
+  totalFare: { type: DataTypes.FLOAT, allowNull: true, field: 'total_fare' }
 }, {
   tableName: 'cargo',
   timestamps: true,
@@ -142,6 +155,11 @@ const Booking = sequelize.define('Booking', {
   },
   eta: { type: DataTypes.STRING },
   pod: { type: DataTypes.TEXT, allowNull: true },
+  deliveryCode: { type: DataTypes.STRING, allowNull: true, field: 'delivery_code' },
+  receiverSignature: { type: DataTypes.TEXT, allowNull: true, field: 'receiver_signature' },
+  podPhotoUrl: { type: DataTypes.STRING, allowNull: true, field: 'pod_photo_url' },
+  conditionStatus: { type: DataTypes.STRING, defaultValue: 'Good Condition', field: 'condition_status' },
+  discrepancyNotes: { type: DataTypes.TEXT, allowNull: true, field: 'discrepancy_notes' },
   completedAt: { type: DataTypes.DATE, field: 'completed_at' }
 }, {
   tableName: 'bookings',

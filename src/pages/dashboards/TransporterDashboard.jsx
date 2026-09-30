@@ -11,6 +11,13 @@ import { logisticsAPI, authAPI, adminAPI, socket } from '../../api';
 import BiltyModal from '../../components/BiltyModal';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer from '../../components/MapViewer';
+import { calculateFreightTariff, VEHICLE_MULTIPLIERS, getIntercityDistance } from '../../utils/fareCalculator';
+
+const PAKISTAN_CITIES = [
+  'Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Islamabad',
+  'Multan', 'Sukkur', 'Peshawar', 'Quetta', 'Gujranwala',
+  'Sialkot', 'Hyderabad', 'Gwadar', 'Hub'
+];
 
 const safeJsonParse = (val, fallback) => {
   if (!val) return fallback;
@@ -39,11 +46,20 @@ export default function TransporterDashboard() {
   const [rejectingCargoId, setRejectingCargoId] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  // Assign Truck states
+  // Assign Truck states & Route Tariff Details
   const [selectedTruckForAssign, setSelectedTruckForAssign] = useState(null);
   const [selectedCargoForAssign, setSelectedCargoForAssign] = useState(null);
   const [assignPrice, setAssignPrice] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignOrigin, setAssignOrigin] = useState('Lahore');
+  const [assignDestination, setAssignDestination] = useState('Karachi');
+  const [assignWeight, setAssignWeight] = useState('15');
+  const [assignVehicleType, setAssignVehicleType] = useState('Full Body Truck');
+
+  // Quick Tariff Estimator
+  const [quickCalcOrigin, setQuickCalcOrigin] = useState('Lahore');
+  const [quickCalcDest, setQuickCalcDest] = useState('Karachi');
+  const [quickCalcWeight, setQuickCalcWeight] = useState('15');
 
   // Active Shipments state
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -122,6 +138,52 @@ export default function TransporterDashboard() {
       fetchData();
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const openAssignModalForTruck = (truck) => {
+    setSelectedTruckForAssign(truck);
+    setSelectedCargoForAssign(null);
+    const orig = truck.loc ? (PAKISTAN_CITIES.find(c => c.toLowerCase() === truck.loc.toLowerCase()) || truck.loc) : 'Lahore';
+    const dest = 'Karachi';
+    const wt = parseFloat(truck.capacity) || 15;
+    const vType = truck.truckType || 'Full Body Truck';
+    setAssignOrigin(orig);
+    setAssignDestination(dest);
+    setAssignWeight(wt);
+    setAssignVehicleType(vType);
+    const tariff = calculateFreightTariff({
+      origin: orig,
+      destination: dest,
+      chargeableTons: wt,
+      vehicleType: vType
+    });
+    setAssignPrice(tariff.totalFare || tariff.totalFreight);
+    setShowAssignModal(true);
+  };
+
+  const handleCargoSelectInModal = (cargoId) => {
+    if (!cargoId) {
+      setSelectedCargoForAssign(null);
+      return;
+    }
+    const cargo = cargoRequests.find(c => String(c._id) === String(cargoId) || Number(c._id) === Number(cargoId));
+    setSelectedCargoForAssign(cargo || null);
+    if (cargo) {
+      const orig = cargo.origin || assignOrigin;
+      const dest = cargo.destination || assignDestination;
+      const wt = cargo.chargeableWeight || cargo.weight || assignWeight;
+      setAssignOrigin(orig);
+      setAssignDestination(dest);
+      setAssignWeight(wt);
+      const tariff = calculateFreightTariff({
+        origin: orig,
+        destination: dest,
+        chargeableTons: wt,
+        vehicleType: assignVehicleType || selectedTruckForAssign?.truckType || 'Full Body Truck',
+        handlingFlags: cargo.specialHandling || []
+      });
+      setAssignPrice(tariff.totalFare || tariff.totalFreight);
     }
   };
 
@@ -245,10 +307,10 @@ export default function TransporterDashboard() {
       <div className="border-b border-amber-200 mb-8 relative z-10">
         <nav className="flex gap-8 overflow-x-auto pb-px">
           {[
-            { id: 'requests', name: 'Incoming Requests', badge: pendingRequests.length },
-            { id: 'trucks', name: 'Available Trucks' },
-            { id: 'shipments', name: 'Active Shipments' },
-            { id: 'history', name: 'Delivery History' }
+            { id: 'requests', name: isUrdu ? 'نئی کارگو درخواستیں' : 'Incoming Requests', badge: pendingRequests.length },
+            { id: 'trucks', name: isUrdu ? 'دستیاب گاڑیاں' : 'Available Trucks' },
+            { id: 'shipments', name: isUrdu ? 'فعال ترسیلات' : 'Active Shipments' },
+            { id: 'history', name: isUrdu ? 'تاریخچہ و ریکارڈ' : 'Delivery History' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -305,12 +367,60 @@ export default function TransporterDashboard() {
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Consignment</p>
                     <div className="space-y-1.5 mt-2">
                       <p className="font-bold text-slate-900 text-sm">{req.title}</p>
-                      <p className="text-xs text-amber-800 font-bold font-mono">{req.weight} tons</p>
+                      <p className="text-xs text-amber-800 font-bold font-mono">
+                        {req.chargeableWeight ? `${req.chargeableWeight} tons (Chargeable)` : `${req.weight} tons`}
+                        {req.packagingType && <span className="ml-2 text-slate-600 font-sans">&bull; {req.packagingType}</span>}
+                      </p>
                       {reqProducts.map((p, idx) => (
                         <p key={idx} className="text-xs text-slate-600 font-mono">
                           &middot; {p.name || p.title} ({p.quantity || p.qty || '1'} units)
+                          {p.length && p.width && p.height ? ` [${p.length}x${p.width}x${p.height}cm]` : ''}
                         </p>
                       ))}
+
+                      {/* Special Handling Badges */}
+                      {(() => {
+                        const flags = Array.isArray(req.specialHandling) ? req.specialHandling : safeJsonParse(req.specialHandling, []);
+                        if (!flags || flags.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {flags.map((flag, fi) => (
+                              <span key={fi} className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                ⚠ {flag}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Calculated Recommended NHA Tariff */}
+                      {(() => {
+                        const reqTariff = calculateFreightTariff({
+                          origin: req.origin,
+                          destination: req.destination,
+                          chargeableTons: req.chargeableWeight || req.weight || 10,
+                          vehicleType: 'Full Body Truck',
+                          handlingFlags: req.specialHandling || []
+                        });
+                        const total = reqTariff.totalFare || reqTariff.totalFreight || 0;
+                        const tax = reqTariff.taxAmount || reqTariff.salesTax || 0;
+                        const base = reqTariff.baseFreight || reqTariff.baseFare || 0;
+                        return (
+                          <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-left mt-2 flex items-center justify-between shadow-xs">
+                            <div>
+                              <p className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
+                                Calculated Tariff ({reqTariff.distanceKm || 0} km)
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                Base: Rs. {base.toLocaleString()} &bull; Tax: Rs. {tax.toLocaleString()}
+                              </p>
+                            </div>
+                            <span className="text-xs font-black text-emerald-700 font-mono">
+                              Rs. {total.toLocaleString()}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -411,6 +521,75 @@ export default function TransporterDashboard() {
                 <UrduMotto />
               </div>
             </div>
+
+            {/* Quick Inter-City Freight Tariff Estimator Bar */}
+            <div className="bg-gradient-to-r from-amber-50 via-white to-amber-50 border-2 border-amber-300 rounded-3xl p-4 shadow-sm text-left">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <TruckTaj className="text-amber-600 w-4 h-3" />
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
+                    ⚡ Live Inter-City Freight Tariff Estimator
+                  </h4>
+                </div>
+                <span className="text-[10px] font-mono text-amber-900 font-bold bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300">
+                  Standard Rate: Rs. 45/Ton-km + 8% Fuel + 16% Tax
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">From (Origin)</label>
+                  <select
+                    value={quickCalcOrigin}
+                    onChange={e => setQuickCalcOrigin(e.target.value)}
+                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium outline-none focus:border-red-600 cursor-pointer"
+                  >
+                    {PAKISTAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">To (Destination)</label>
+                  <select
+                    value={quickCalcDest}
+                    onChange={e => setQuickCalcDest(e.target.value)}
+                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium outline-none focus:border-red-600 cursor-pointer"
+                  >
+                    {PAKISTAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Payload (Tons)</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={quickCalcWeight}
+                    onChange={e => setQuickCalcWeight(e.target.value)}
+                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono outline-none focus:border-red-600"
+                  />
+                </div>
+                {(() => {
+                  const quickTariff = calculateFreightTariff({
+                    origin: quickCalcOrigin,
+                    destination: quickCalcDest,
+                    chargeableTons: parseFloat(quickCalcWeight) || 10,
+                    vehicleType: 'Full Body Truck'
+                  });
+                  const quickTotal = quickTariff.totalFare || quickTariff.totalFreight || 0;
+                  return (
+                    <div className="bg-white border-2 border-red-500 rounded-xl p-2 px-3 flex items-center justify-between shadow-xs">
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block font-mono">{quickTariff.distanceKm || 0} km</span>
+                        <span className="text-sm font-black text-red-700 font-mono">Rs. {quickTotal.toLocaleString()}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
+                        Estimated
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
             
             {trucksViewMode === 'radar' ? (
               /* Live Fleet Radar Map View */
@@ -430,12 +609,7 @@ export default function TransporterDashboard() {
 
                   <MapViewer 
                     trucks={availableTrucks}
-                    onAssignTruck={(truck) => {
-                      setSelectedTruckForAssign(truck);
-                      setSelectedCargoForAssign(null);
-                      setAssignPrice('');
-                      setShowAssignModal(true);
-                    }}
+                    onAssignTruck={(truck) => openAssignModalForTruck(truck)}
                     height="500px"
                     zoom={6}
                   />
@@ -446,12 +620,7 @@ export default function TransporterDashboard() {
                   {availableTrucks.map(truck => (
                     <div 
                       key={truck._id || truck.id}
-                      onClick={() => {
-                        setSelectedTruckForAssign(truck);
-                        setSelectedCargoForAssign(null);
-                        setAssignPrice('');
-                        setShowAssignModal(true);
-                      }}
+                      onClick={() => openAssignModalForTruck(truck)}
                       className="bg-white border border-amber-200 rounded-xl p-3 text-left hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md flex items-center justify-between group"
                     >
                       <div>
@@ -498,12 +667,7 @@ export default function TransporterDashboard() {
                     </div>
 
                     <button 
-                      onClick={() => {
-                        setSelectedTruckForAssign(truck);
-                        setSelectedCargoForAssign(null);
-                        setAssignPrice('');
-                        setShowAssignModal(true);
-                      }}
+                      onClick={() => openAssignModalForTruck(truck)}
                       className="w-full btn-primary font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer mt-4 shadow-md"
                     >
                       {isUrdu ? 'گاڑی مقرر کریں' : 'Assign to Shipment'}
@@ -807,62 +971,222 @@ export default function TransporterDashboard() {
         </div>
       )}
 
-      {/* Assign Truck popup form */}
-      {showAssignModal && selectedTruckForAssign && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
-          <div className="bg-white w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl overflow-hidden">
-            <ChamakRibbon height="h-[5px]" />
-            <button onClick={() => setShowAssignModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
-              <X size={20} />
-            </button>
-            <div className="flex items-center gap-2 mb-1 mt-2 text-left">
-              <TruckTaj className="text-amber-600 w-4 h-3" />
-              <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Fleet Dispatch Assignment</span>
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 mb-2 text-left">Assign Truck to Shipment</h2>
-            <p className="text-xs text-slate-600 mb-6 text-left">Select an accepted cargo shipment request to assign vehicle <span className="text-red-700 font-bold font-mono">{selectedTruckForAssign.plateNumber}</span>.</p>
-            <form onSubmit={handleAssignConfirm} className="space-y-4 text-left">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Select Accepted Shipment *</label>
-                <select 
-                  required
-                  onChange={e => setSelectedCargoForAssign(cargoRequests.find(c => Number(c._id) === Number(e.target.value)))}
-                  className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500">
-                  <option value="">-- Choose Cargo --</option>
-                  {cargoRequests
-                    .filter(c => c.status === 'Accepted')
-                    .map(c => (
-                      <option key={c._id} value={String(c._id)}>
-                        {c.title} ({c.weight} tons) &rarr; {c.destination}
-                      </option>
-                    ))}
-                </select>
-                {cargoRequests.filter(c => c.status === 'Accepted').length === 0 && (
-                  <p className="text-[10px] text-amber-700 mt-1 font-semibold">No accepted shipments are available. Accept requests first.</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Agreed Price (PKR) *</label>
-                <input 
-                  required
-                  type="number"
-                  value={assignPrice}
-                  onChange={e => setAssignPrice(e.target.value)}
-                  placeholder="e.g. 75000"
-                  className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono"
-                />
-              </div>
-              <button 
-                type="submit" 
-                disabled={!assignPrice || !selectedCargoForAssign}
-                className="w-full btn-primary disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all cursor-pointer mt-4 shadow-md"
-              >
-                {isUrdu ? 'گاڑی مقرر کریں' : 'Confirm Assignment & Request'}
+      {/* Assign Truck popup form with Dynamic Fare Calculation */}
+      {showAssignModal && selectedTruckForAssign && (() => {
+        const activeTariff = calculateFreightTariff({
+          origin: assignOrigin || 'Lahore',
+          destination: assignDestination || 'Karachi',
+          chargeableTons: parseFloat(assignWeight) || 10,
+          vehicleType: assignVehicleType || selectedTruckForAssign?.truckType || 'Full Body Truck',
+          handlingFlags: selectedCargoForAssign?.specialHandling || []
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
+            <div className="bg-white w-full max-w-lg max-h-[92vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl">
+              <ChamakRibbon height="h-[5px]" />
+              <button onClick={() => setShowAssignModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X size={20} />
               </button>
-            </form>
+              <div className="flex items-center gap-2 mb-1 mt-2 text-left">
+                <TruckTaj className="text-amber-600 w-4 h-3" />
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Fleet Dispatch &amp; Tariff Engine</span>
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 mb-1 text-left">Assign Truck &amp; Calculate Fare</h2>
+              <p className="text-xs text-slate-600 mb-4 text-left">
+                Select route and consignment details to view automated government/NHA freight tariff for vehicle <span className="text-red-700 font-bold font-mono">{selectedTruckForAssign.plateNumber}</span>.
+              </p>
+
+              {/* Truck summary badge */}
+              <div className="bg-[#FAF7EE] border border-amber-200/90 rounded-2xl p-3 mb-4 text-left flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-slate-900 text-sm">{selectedTruckForAssign.plateNumber}</span>
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300 font-mono">
+                      {selectedTruckForAssign.truckType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Depot: <span className="text-slate-900 font-medium">{selectedTruckForAssign.loc}</span> &bull; Driver: <span className="text-slate-900 font-medium">{selectedTruckForAssign.driverName}</span>
+                  </p>
+                </div>
+                <div className="text-right font-mono">
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-300">
+                    Max: {selectedTruckForAssign.capacity}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleAssignConfirm} className="space-y-4 text-left">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Select Accepted Consignment Request (Optional)
+                  </label>
+                  <select 
+                    value={selectedCargoForAssign ? String(selectedCargoForAssign._id) : ''}
+                    onChange={e => handleCargoSelectInModal(e.target.value)}
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-medium cursor-pointer"
+                  >
+                    <option value="">-- Custom Route / Manual Consignment --</option>
+                    {cargoRequests
+                      .filter(c => c.status === 'Accepted')
+                      .map(c => (
+                        <option key={c._id} value={String(c._id)}>
+                          REQ-{c._id}: {c.title} ({c.weight} tons) &bull; {c.origin} &rarr; {c.destination}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Route Details: From, To, Weight, Vehicle Type */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      From (Origin City) *
+                    </label>
+                    <select
+                      value={assignOrigin}
+                      onChange={e => setAssignOrigin(e.target.value)}
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
+                    >
+                      {PAKISTAN_CITIES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      To (Destination City) *
+                    </label>
+                    <select
+                      value={assignDestination}
+                      onChange={e => setAssignDestination(e.target.value)}
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
+                    >
+                      {PAKISTAN_CITIES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Consignment Weight (Tons) *
+                    </label>
+                    <input 
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      value={assignWeight}
+                      onChange={e => setAssignWeight(e.target.value)}
+                      placeholder="e.g. 15"
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Vehicle Multiplier Class
+                    </label>
+                    <select
+                      value={assignVehicleType}
+                      onChange={e => setAssignVehicleType(e.target.value)}
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
+                    >
+                      <option value="Mini Truck">Mini Truck (0.85x)</option>
+                      <option value="Half Body Truck">Half Body Truck (1.00x)</option>
+                      <option value="Full Body Truck">Full Body Truck (1.15x)</option>
+                      <option value="Container (20ft)">Container 20ft (1.10x)</option>
+                      <option value="Container (40ft)">Container 40ft (1.20x)</option>
+                      <option value="18-Wheeler Trailer">18-Wheeler Trailer (1.25x)</option>
+                      <option value="22-Wheeler">22-Wheeler (1.30x)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Live Dynamic Calculated Fare Card */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 border-2 border-amber-300 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                    <span className="text-[11px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <TruckTaj className="w-3.5 h-3 text-amber-600" />
+                      Dynamic Tariff Breakdown
+                    </span>
+                    <span className="text-xs font-mono font-bold text-slate-600">
+                      🛣️ {activeTariff.distanceKm} km (NHA Highway)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-2.5 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Base Freight</span>
+                      <span className="font-mono font-bold text-slate-800">Rs. {(activeTariff.baseFreight || activeTariff.baseFare || 0).toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-400 block font-mono">@ Rs. 45/Ton-km x {activeTariff.tons || activeTariff.chargeableTons || 1}T</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Fuel Surcharge (8%)</span>
+                      <span className="font-mono font-bold text-slate-800">Rs. {(activeTariff.fuelSurcharge || 0).toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-400 block font-mono">National Diesel Index</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Provincial Tax (16%)</span>
+                      <span className="font-mono font-bold text-slate-800">Rs. {(activeTariff.taxAmount || activeTariff.salesTax || 0).toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-400 block font-mono">PRA / SRB Services</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Vehicle Multiplier</span>
+                      <span className="font-mono font-bold text-slate-800">{activeTariff.vehicleMultiplier || 1}x</span>
+                      <span className="text-[9px] text-slate-400 block font-mono">{activeTariff.vehicleType || 'Standard'}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-amber-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider">Calculated Fare:</span>
+                      <p className="text-xl font-black text-red-700 font-mono">Rs. {(activeTariff.totalFare || activeTariff.totalFreight || 0).toLocaleString()}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssignPrice(activeTariff.totalFare || activeTariff.totalFreight)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      ⚡ Apply Fare
+                    </button>
+                  </div>
+                </div>
+
+                {/* Agreed Price input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Agreed / Contract Price (PKR) *
+                  </label>
+                  <input 
+                    required
+                    type="number"
+                    value={assignPrice}
+                    onChange={e => setAssignPrice(e.target.value)}
+                    placeholder="e.g. 75000"
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-sm font-bold outline-none focus:bg-white focus:border-amber-500 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Tip: Click "⚡ Apply Fare" above to auto-fill with the government/NHA tariff estimate, or adjust manually.
+                  </p>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={!assignPrice}
+                  className="w-full btn-primary disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all cursor-pointer mt-4 shadow-md"
+                >
+                  {isUrdu ? 'گاڑی مقرر کریں' : 'Confirm Dispatch & Assignment'}
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Bilty PDF Preview Modal */}
       <BiltyModal

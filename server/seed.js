@@ -71,6 +71,22 @@ async function seed() {
       console.log('✅ Truck Owner created: truckowner@ecargo.com');
     }
 
+    // 4b. Create or find Driver
+    let driver = await User.findOne({ where: { email: 'driver@ecargo.com' } });
+    if (!driver) {
+      driver = await User.create({
+        name: 'Muhammad Rasheed (Driver)',
+        email: 'driver@ecargo.com',
+        password: 'password123',
+        role: 'truck_owner',
+        status: 'active',
+        phone: '0302-1239876',
+        cnic: '37405-9988776-1'
+      });
+      console.log('✅ Driver created: driver@ecargo.com');
+    }
+
+
     // 5. Create Sample Trucks for Truck Owner
     const existingTrucks = await Truck.count({ where: { ownerId: truckOwner.id } });
     if (existingTrucks === 0) {

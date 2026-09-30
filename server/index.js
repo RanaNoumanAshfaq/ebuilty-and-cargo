@@ -9,6 +9,16 @@ require('dotenv').config();
 const sequelize = require('./db');
 const User = require('./models/User');
 const { Truck, Cargo, Booking, BookingMessage, Notification, Complaint } = require('./models/Logistics');
+const {
+  initWhatsApp,
+  sendWhatsAppMessage,
+  notifyCargoCreated,
+  notifyBookingOffer,
+  notifyBookingStatusUpdate,
+  notifyDeliveryCompleted,
+  getWhatsAppStatus
+} = require('./services/whatsapp');
+
 
 const app = express();
 app.use(cors());
@@ -136,6 +146,22 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('User disconnected'));
 });
 
+// ─── Initialize WhatsApp Web Client ──────────────────────────────────────────
+initWhatsApp(io);
+
+// ─── WhatsApp Status & Test Endpoints ────────────────────────────────────────
+app.get('/api/whatsapp/status', authMiddleware, (req, res) => {
+  res.json(getWhatsAppStatus());
+});
+
+app.post('/api/whatsapp/test', authMiddleware, async (req, res) => {
+  const { phone, message } = req.body;
+  if (!phone) return res.status(400).json({ message: 'Phone number is required' });
+  const result = await sendWhatsAppMessage(phone, message || 'Hello from E-Cargo-Bilty WhatsApp Service!');
+  res.json(result);
+});
+
+
 // ─── Notification Helper ───────────────────────────────────────────────────────
 
 const sendNotification = async (userId, message) => {
@@ -250,6 +276,10 @@ const formatCargo = (c) => {
     products: safeParseJson(plain.products, []),
     pickupDetails: safeParseJson(plain.pickupDetails, {}),
     recipients: safeParseJson(plain.recipients, []),
+    dimensions: safeParseJson(plain.dimensions, {}),
+    specialHandling: safeParseJson(plain.specialHandling, []),
+    packagingType: plain.packagingType || 'Cartons / Boxes',
+    paymentTerms: plain.paymentTerms || 'Prepaid',
     _id: plain.id,
     transporterName: plain.transporter ? plain.transporter.name : (plain.transporterName || 'Unassigned'),
     businessOwnerName: plain.businessOwner ? (plain.businessOwner.businessName || plain.businessOwner.name) : (plain.businessOwnerName || 'Unknown')
@@ -289,6 +319,13 @@ app.post('/api/cargo', authMiddleware, async (req, res) => {
       data.transporterId = req.user.id;
     }
     const cargo = await Cargo.create(data);
+
+    // Trigger WhatsApp notification for new shipment
+    User.findByPk(cargo.businessOwnerId).then(shipper => {
+      const recipients = safeParseJson(cargo.recipients, []);
+      notifyCargoCreated(cargo, shipper, recipients);
+    }).catch(e => console.error('WhatsApp notifyCargoCreated error:', e.message));
+
     res.status(201).json({ ...cargo.toJSON(), _id: cargo.id });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -299,11 +336,39 @@ app.patch('/api/cargo/:id', authMiddleware, async (req, res) => {
   try {
     await Cargo.update(req.body, { where: { id: req.params.id } });
     const cargo = await Cargo.findByPk(req.params.id);
+
+    // If status updated on cargo, trigger WhatsApp notification if booking exists
+    if (['In Transit', 'Loaded', 'Completed'].includes(req.body.status)) {
+      Booking.findOne({ where: { cargoId: cargo.id } }).then(async (booking) => {
+        if (booking) {
+          const truck = await Truck.findByPk(booking.truckId);
+          const shipper = cargo.businessOwnerId ? await User.findByPk(cargo.businessOwnerId) : null;
+          const transporter = booking.transporterId ? await User.findByPk(booking.transporterId) : null;
+          let recipients = [];
+          if (typeof cargo.recipients === 'string') {
+            recipients = safeParseJson(cargo.recipients, []);
+          } else if (Array.isArray(cargo.recipients)) {
+            recipients = cargo.recipients;
+          }
+          notifyBookingStatusUpdate({
+            booking,
+            status: req.body.status,
+            cargo,
+            truck,
+            shipper,
+            transporter,
+            recipients
+          });
+        }
+      }).catch(e => console.error('WhatsApp cargo patch notification error:', e.message));
+    }
+
     res.json({ ...cargo.toJSON(), _id: cargo.id });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 app.patch('/api/cargo/:id/respond', authMiddleware, async (req, res) => {
   try {
@@ -361,9 +426,23 @@ app.get('/api/bookings', authMiddleware, async (req, res) => {
 
 app.post('/api/bookings', authMiddleware, async (req, res) => {
   try {
-    const booking = await Booking.create({ ...req.body, transporterId: req.user.id });
+    const deliveryCode = req.body.deliveryCode || Math.floor(1000 + Math.random() * 9000).toString();
+    const booking = await Booking.create({ ...req.body, deliveryCode, transporterId: req.user.id });
     await sendNotification(booking.truckOwnerId, `New booking request for ${booking.cargoTitle}`);
     io.emit('booking_updated');
+
+
+    // Trigger WhatsApp notification to Truck Owner/Driver
+    Promise.all([
+      Truck.findByPk(booking.truckId, { include: [{ model: User, as: 'owner' }] }),
+      Cargo.findByPk(booking.cargoId),
+      User.findByPk(req.user.id)
+    ]).then(([truck, cargo, transporter]) => {
+      if (truck) {
+        notifyBookingOffer(booking, truck, cargo, transporter);
+      }
+    }).catch(e => console.error('WhatsApp notifyBookingOffer error:', e.message));
+
     res.status(201).json({ ...booking.toJSON(), _id: booking.id, messages: [] });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -426,11 +505,47 @@ app.patch('/api/bookings/:id', authMiddleware, async (req, res) => {
     }
 
     io.emit('booking_updated');
+
+    // Trigger WhatsApp notification for booking transit state changes (Shipper, Transporter, AND all Recipients)
+    Promise.all([
+      Truck.findByPk(booking.truckId),
+      Cargo.findByPk(booking.cargoId),
+      User.findByPk(booking.transporterId)
+    ]).then(async ([truck, cargo, transporter]) => {
+      const shipper = cargo && cargo.businessOwnerId ? await User.findByPk(cargo.businessOwnerId) : null;
+      let recipients = [];
+      if (cargo && cargo.recipients) {
+        if (typeof cargo.recipients === 'string') {
+          recipients = safeParseJson(cargo.recipients, []);
+        } else if (Array.isArray(cargo.recipients)) {
+          recipients = cargo.recipients;
+        }
+      }
+
+      // Ensure deliveryCode exists on the booking if status is In Transit
+      if (req.body.status === 'In Transit' && !booking.deliveryCode) {
+        const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+        await Booking.update({ deliveryCode: generatedCode }, { where: { id: booking.id } });
+        booking.deliveryCode = generatedCode;
+      }
+
+      notifyBookingStatusUpdate({
+        booking,
+        status: req.body.status,
+        cargo,
+        truck,
+        shipper,
+        transporter,
+        recipients
+      });
+    }).catch(e => console.error('WhatsApp notifyBookingStatusUpdate error:', e.message));
+
     res.json({ ...booking.toJSON(), _id: booking.id });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 
 // ─── Booking Complete Route ────────────────────────────────────────────────────
@@ -439,17 +554,42 @@ app.post('/api/bookings/:id/complete', authMiddleware, async (req, res) => {
   try {
     const booking = await Booking.findByPk(req.params.id);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
-    const { pod } = req.body;
+    const { pod, deliveryCode, receiverSignature, podPhotoUrl, conditionStatus, discrepancyNotes } = req.body;
 
-    await Booking.update({ status: 'Completed', completedAt: new Date(), pod }, { where: { id: req.params.id } });
+    await Booking.update({ 
+      status: 'Completed', 
+      completedAt: new Date(), 
+      pod: pod || podPhotoUrl,
+      deliveryCode: deliveryCode || null,
+      receiverSignature: receiverSignature || null,
+      podPhotoUrl: podPhotoUrl || null,
+      conditionStatus: conditionStatus || 'Good Condition',
+      discrepancyNotes: discrepancyNotes || null
+    }, { where: { id: req.params.id } });
     await Truck.update({ status: 'Available' }, { where: { id: booking.truckId } });
     await Cargo.update({ status: 'Completed' }, { where: { id: booking.cargoId } });
     await sendNotification(booking.transporterId, `Delivery completed for ${booking.cargoTitle}.`);
 
     io.emit('booking_updated');
+
+    // Trigger WhatsApp notification on delivery completion to Shipper AND Recipients
+    Cargo.findByPk(booking.cargoId).then(async (cargo) => {
+      if (cargo) {
+        const shipper = cargo.businessOwnerId ? await User.findByPk(cargo.businessOwnerId) : null;
+        let recipients = [];
+        if (typeof cargo.recipients === 'string') {
+          recipients = safeParseJson(cargo.recipients, []);
+        } else if (Array.isArray(cargo.recipients)) {
+          recipients = cargo.recipients;
+        }
+        notifyDeliveryCompleted(booking, cargo, shipper, recipients);
+      }
+    }).catch(e => console.error('WhatsApp notifyDeliveryCompleted error:', e.message));
+
     const updated = await Booking.findByPk(req.params.id);
     res.json({ message: 'Booking marked as completed', booking: { ...updated.toJSON(), _id: updated.id } });
   } catch (error) {
+
     res.status(500).json({ message: error.message });
   }
 });
@@ -738,8 +878,41 @@ app.get('/api/admin/activity', authMiddleware, async (req, res) => {
 // ─── Start Server ──────────────────────────────────────────────────────────────
 
 const isSqlite = sequelize.getDialect() === 'sqlite';
+
+const ensureSqliteColumns = async () => {
+  if (!isSqlite) return;
+  const queries = [
+    `ALTER TABLE cargo ADD COLUMN packaging_type TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN dimensions TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN special_handling TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN declared_value TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN payment_terms TEXT DEFAULT 'Prepaid';`,
+    `ALTER TABLE cargo ADD COLUMN sender_ntn TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN delivery_notes TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN chargeable_weight TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN volumetric_weight TEXT;`,
+    `ALTER TABLE cargo ADD COLUMN base_fare REAL;`,
+    `ALTER TABLE cargo ADD COLUMN fuel_surcharge REAL;`,
+    `ALTER TABLE cargo ADD COLUMN tax_amount REAL;`,
+    `ALTER TABLE cargo ADD COLUMN total_fare REAL;`,
+    `ALTER TABLE bookings ADD COLUMN delivery_code TEXT;`,
+    `ALTER TABLE bookings ADD COLUMN receiver_signature TEXT;`,
+    `ALTER TABLE bookings ADD COLUMN pod_photo_url TEXT;`,
+    `ALTER TABLE bookings ADD COLUMN condition_status TEXT DEFAULT 'Good Condition';`,
+    `ALTER TABLE bookings ADD COLUMN discrepancy_notes TEXT;`
+  ];
+  for (const q of queries) {
+    try {
+      await sequelize.query(q);
+    } catch (e) {
+      // Column already exists or table handles it
+    }
+  }
+};
+
 sequelize.sync(isSqlite ? {} : { alter: true })
-  .then(() => {
+  .then(async () => {
+    await ensureSqliteColumns();
     console.log(`✅ ${isSqlite ? 'SQLite' : 'MySQL'} Database synced`);
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);

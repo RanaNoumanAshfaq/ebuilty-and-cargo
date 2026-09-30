@@ -4,13 +4,20 @@ import {
   Users, FileText, Activity, AlertTriangle, Check, X, Shield, 
   Package, Trash2, CheckCircle, Loader2, ArrowRight, Truck, 
   Mail, Phone, Clock, Eye, AlertCircle, FileCheck, Send, MessageSquare, 
-  MapPin, Calendar, Plus, Map, Info
+  MapPin, Calendar, Plus, Map, Info, Snowflake, Flame, ArrowUp, DollarSign, Calculator, Layers
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { logisticsAPI, authAPI, socket } from '../../api';
 import { generateBiltyPDF } from '../../utils/generateBiltyPDF';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer, { getCoordinatesForLocation } from '../../components/MapViewer';
+import { 
+  calculateFreightTariff, 
+  calculateVolumetricWeight, 
+  PACKAGING_TYPES, 
+  SPECIAL_HANDLING_FLAGS, 
+  PAYMENT_TERMS_OPTIONS 
+} from '../../utils/fareCalculator';
 
 export default function BusinessDashboard() {
   const { userData, currentUser } = useAuth();
@@ -28,8 +35,15 @@ export default function BusinessDashboard() {
   const [selectedTransporter, setSelectedTransporter] = useState(null);
   
   const [products, setProducts] = useState([
-    { name: '', qty: '', unitWeight: '', type: 'Industrial' }
+    { name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }
   ]);
+
+  const [packagingType, setPackagingType] = useState('Cartons / Boxes');
+  const [specialHandling, setSpecialHandling] = useState([]);
+  const [senderNTN, setSenderNTN] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('Prepaid');
+  const [vehicleTypeChoice, setVehicleTypeChoice] = useState('18-Wheeler Trailer');
 
   const [pickupDetails, setPickupDetails] = useState({
     streetAddress: '',
@@ -92,7 +106,7 @@ export default function BusinessDashboard() {
 
   // Products utilities
   const addProductRow = () => {
-    setProducts([...products, { name: '', qty: '', unitWeight: '', type: 'Industrial' }]);
+    setProducts([...products, { name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }]);
   };
 
   const removeProductRow = (idx) => {
@@ -120,13 +134,45 @@ export default function BusinessDashboard() {
     setRecipients(updated);
   };
 
-  // Auto-calculated weight (total sum of Qty * UnitWeight)
-  const calculateTotalWeight = () => {
+  // Auto-calculated gross weight (total sum of Qty * UnitWeight in tons)
+  const calculateGrossWeight = () => {
     return products.reduce((sum, p) => {
       const qty = parseFloat(p.qty) || 0;
       const wt = parseFloat(p.unitWeight) || 0;
       return sum + (qty * wt);
     }, 0);
+  };
+
+  // Auto-calculated volumetric weight (sum of (L * W * H / 5000) * Qty / 1000 in tons)
+  const calculateTotalVolumetricWeight = () => {
+    return products.reduce((sum, p) => {
+      const vol = calculateVolumetricWeight(p.lengthCm, p.widthCm, p.heightCm, p.qty);
+      return sum + vol.tons;
+    }, 0);
+  };
+
+  const grossWeight = calculateGrossWeight();
+  const volumetricWeight = calculateTotalVolumetricWeight();
+  const chargeableWeight = Math.max(grossWeight, volumetricWeight);
+
+  // Dynamic tariff estimation
+  const destinationCity = recipients[0]?.city || 'Karachi';
+  const tariffQuote = useMemo(() => {
+    return calculateFreightTariff({
+      origin: pickupDetails.city || 'Lahore',
+      destination: destinationCity,
+      chargeableTons: Math.max(0.5, chargeableWeight),
+      vehicleType: vehicleTypeChoice,
+      handlingFlags: specialHandling
+    });
+  }, [pickupDetails.city, destinationCity, chargeableWeight, vehicleTypeChoice, specialHandling]);
+
+  const toggleSpecialHandling = (flagId) => {
+    if (specialHandling.includes(flagId)) {
+      setSpecialHandling(specialHandling.filter(f => f !== flagId));
+    } else {
+      setSpecialHandling([...specialHandling, flagId]);
+    }
   };
 
   const handleRequestSubmit = async (e, status = 'Pending') => {
@@ -136,12 +182,22 @@ export default function BusinessDashboard() {
       return;
     }
 
-    const totalCalculatedWeight = calculateTotalWeight();
     const cargoTitle = products.map(p => `${p.name || 'Goods'} (x${p.qty || 1})`).join(', ');
 
     const payload = {
       title: cargoTitle,
-      weight: totalCalculatedWeight.toString(),
+      weight: (chargeableWeight > 0 ? chargeableWeight : 1).toFixed(2),
+      chargeableWeight: (chargeableWeight > 0 ? chargeableWeight : 1).toFixed(2),
+      volumetricWeight: volumetricWeight.toFixed(2),
+      packagingType,
+      specialHandling,
+      senderNTN: senderNTN || null,
+      deliveryNotes: deliveryNotes || null,
+      paymentTerms,
+      baseFare: tariffQuote.baseFreight,
+      fuelSurcharge: tariffQuote.fuelSurcharge,
+      taxAmount: tariffQuote.salesTax,
+      totalFare: tariffQuote.totalFreight,
       origin: pickupDetails.city || 'Depot',
       destination: recipients.map(r => r.city).join(', ') || 'Receivers',
       transporterId: selectedTransporter._id,
@@ -150,7 +206,12 @@ export default function BusinessDashboard() {
         name: p.name,
         category: p.type,
         qty: parseInt(p.qty) || 1,
-        unitWeight: p.unitWeight
+        unitWeight: p.unitWeight,
+        dimensions: {
+          lengthCm: p.lengthCm || 0,
+          widthCm: p.widthCm || 0,
+          heightCm: p.heightCm || 0
+        }
       })),
       pickupDetails: {
         address: `${pickupDetails.streetAddress}, ${pickupDetails.city}, ${pickupDetails.province}`,
@@ -168,11 +229,15 @@ export default function BusinessDashboard() {
 
     try {
       await logisticsAPI.postCargo(payload);
-      alert(status === 'Draft' ? 'Shipment saved as draft!' : 'Request submitted successfully!');
+      alert(status === 'Draft' ? 'Shipment saved as draft!' : 'Request submitted successfully with verified tariff!');
       
       // Reset forms
       setSelectedTransporter(null);
-      setProducts([{ name: '', qty: '', unitWeight: '', type: 'Industrial' }]);
+      setProducts([{ name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }]);
+      setPackagingType('Cartons / Boxes');
+      setSpecialHandling([]);
+      setSenderNTN('');
+      setDeliveryNotes('');
       setPickupDetails({ streetAddress: '', city: '', province: '', landmark: '', contactPerson: '', contactPhone: '' });
       setRecipients([{ fullName: '', phone: '', city: '', province: '', streetAddress: '', deadline: '', assignedProducts: '' }]);
       
@@ -202,11 +267,18 @@ export default function BusinessDashboard() {
       cargoTitle: cargo.title,
       transporterName: cargo.transporterName || 'Unassigned',
       truckPlate: cargo.assignedTruck || 'Unassigned',
-      price: associatedBooking ? associatedBooking.price : '50,000',
+      price: associatedBooking ? associatedBooking.price : (cargo.totalFare ? cargo.totalFare.toLocaleString() : '50,000'),
       completedAt: cargo.createdAt,
       origin: cargo.origin,
       destination: cargo.destination,
-      weight: cargo.weight
+      weight: cargo.weight,
+      chargeableWeight: cargo.chargeableWeight || cargo.weight,
+      packagingType: cargo.packagingType || 'Cartons / Boxes',
+      paymentTerms: cargo.paymentTerms || 'Prepaid',
+      specialHandling: cargo.specialHandling || [],
+      senderNTN: cargo.senderNTN,
+      deliveryNotes: cargo.deliveryNotes,
+      businessOwnerName: userData?.businessName || userData?.name
     };
     generateBiltyPDF(biltyData);
   };
@@ -353,62 +425,130 @@ export default function BusinessDashboard() {
               </div>
             </div>
 
-            {/* Step 2: PRODUCTS */}
+            {/* Step 2: PRODUCTS, PACKAGING & VOLUMETRIC SPECS */}
             <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">2</span>
-                  {isUrdu ? 'مال کی تفصیلات' : 'Cargo Products & Consignment'}
+                  {isUrdu ? 'مال کی تفصیلات اور پیکجنگ' : 'Cargo Products, Packaging & Volumetric Weight'}
                 </h3>
-                <button 
-                  type="button"
-                  onClick={addProductRow}
-                  className="btn-outline text-xs !py-1.5 !px-3"
-                >
-                  <Plus size={14} /> Add Product
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase font-mono">Packaging:</label>
+                    <select 
+                      value={packagingType} 
+                      onChange={e => setPackagingType(e.target.value)} 
+                      className="bg-[#FAF7EE] border border-amber-300 rounded-xl px-2.5 py-1 text-slate-900 text-xs font-semibold outline-none focus:border-amber-500"
+                    >
+                      {PACKAGING_TYPES.map(pkg => (
+                        <option key={pkg} value={pkg}>{pkg}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={addProductRow}
+                    className="btn-outline text-xs !py-1.5 !px-3"
+                  >
+                    <Plus size={14} /> Add Product
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
-                {products.map((prod, idx) => (
-                  <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-[#FAF7EE] border border-amber-200/80 p-4 rounded-2xl relative">
-                    {products.length > 1 && (
-                      <button 
-                        type="button"
-                        onClick={() => removeProductRow(idx)}
-                        className="absolute top-2 right-2 text-slate-400 hover:text-red-600 cursor-pointer p-1"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                    <div className="md:col-span-4">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Product Name</label>
-                      <input required type="text" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Steel Coils" />
+                {products.map((prod, idx) => {
+                  const vol = calculateVolumetricWeight(prod.lengthCm, prod.widthCm, prod.heightCm, prod.qty);
+                  const grossItemTons = (parseFloat(prod.qty) || 0) * (parseFloat(prod.unitWeight) || 0);
+
+                  return (
+                    <div key={idx} className="bg-[#FAF7EE] border border-amber-200/80 p-4 rounded-2xl relative space-y-3">
+                      {products.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => removeProductRow(idx)}
+                          className="absolute top-2 right-2 text-slate-400 hover:text-red-600 cursor-pointer p-1"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                        <div className="md:col-span-4">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Product Name</label>
+                          <input required type="text" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Cotton Textiles / Machinery" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Quantity</label>
+                          <input required type="number" value={prod.qty} onChange={e => handleProductChange(idx, 'qty', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="Units" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Unit Wt (Tons)</label>
+                          <input required type="number" step="any" value={prod.unitWeight} onChange={e => handleProductChange(idx, 'unitWeight', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="Tons" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Wt</label>
+                          <input disabled type="text" value={`${grossItemTons.toFixed(2)} tons`} className="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono font-bold" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Category</label>
+                          <select value={prod.type} onChange={e => handleProductChange(idx, 'type', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500">
+                            <option value="Industrial">Industrial</option>
+                            <option value="Agricultural">Agricultural</option>
+                            <option value="Textiles">Textiles</option>
+                            <option value="Chemicals">Chemicals</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Construction">Construction</option>
+                            <option value="General">General</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Volumetric Dimensions Row (L x W x H in cm) */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2 border-t border-amber-200/50 items-center">
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Length (cm)</label>
+                          <input type="number" value={prod.lengthCm || ''} onChange={e => handleProductChange(idx, 'lengthCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 120" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Width (cm)</label>
+                          <input type="number" value={prod.widthCm || ''} onChange={e => handleProductChange(idx, 'widthCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 80" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Height (cm)</label>
+                          <input type="number" value={prod.heightCm || ''} onChange={e => handleProductChange(idx, 'heightCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 160" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Volumetric Wt</label>
+                          <div className="bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5 text-sky-800 text-xs font-mono font-bold">
+                            {vol.tons > 0 ? `${vol.tons.toFixed(2)} tons (${vol.kg} kg)` : '0.00 tons'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Chargeable</label>
+                          <div className="bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1.5 text-emerald-800 text-xs font-mono font-black">
+                            {Math.max(grossItemTons, vol.tons).toFixed(2)} tons
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Qty</label>
-                      <input required type="number" value={prod.qty} onChange={e => handleProductChange(idx, 'qty', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="e.g. 4" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Unit Weight (Tons)</label>
-                      <input required type="number" step="any" value={prod.unitWeight} onChange={e => handleProductChange(idx, 'unitWeight', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="e.g. 3" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Weight</label>
-                      <input disabled type="text" value={`${(parseFloat(prod.qty) || 0) * (parseFloat(prod.unitWeight) || 0)} tons`} className="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-red-700 text-xs font-mono font-bold" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Type</label>
-                      <select value={prod.type} onChange={e => handleProductChange(idx, 'type', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500">
-                        <option value="Agricultural">Agricultural</option>
-                        <option value="Industrial">Industrial</option>
-                        <option value="Electronics">Electronics</option>
-                        <option value="Construction">Construction</option>
-                        <option value="General">General</option>
-                      </select>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+
+              {/* Weight Totals Bar */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+                <div>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Gross Weight</span>
+                  <span className="text-slate-900 font-black text-sm">{grossWeight.toFixed(2)} Metric Tons</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Volumetric Weight (L×W×H/5000)</span>
+                  <span className="text-sky-700 font-black text-sm">{volumetricWeight.toFixed(2)} Metric Tons</span>
+                </div>
+                <div className="bg-white border-2 border-emerald-500 rounded-xl px-4 py-2 shadow-xs">
+                  <span className="text-emerald-700 font-bold uppercase text-[10px] block">Final Chargeable Weight</span>
+                  <span className="text-emerald-800 font-black text-base">{chargeableWeight.toFixed(2)} Tons (max of Gross & Volumetric)</span>
+                </div>
               </div>
             </div>
 
@@ -517,6 +657,152 @@ export default function BusinessDashboard() {
               </div>
             </div>
 
+            {/* Step 5: SPECIAL HANDLING, TAX ID, PAYMENT TERMS & LIVE TARIFF CALCULATOR */}
+            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-6 shadow-md">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">5</span>
+                {isUrdu ? 'خصوصی ہدایات، ٹیکس اور کرایہ کا تخمینہ' : 'Special Handling, NTN & Automated Fare Tariff'}
+              </h3>
+
+              {/* Special Handling Badges Checkboxes */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Special Cargo Handling Flags
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  {SPECIAL_HANDLING_FLAGS.map(flag => {
+                    const isChecked = specialHandling.includes(flag.id);
+                    return (
+                      <div
+                        key={flag.id}
+                        onClick={() => toggleSpecialHandling(flag.id)}
+                        className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-2.5 ${
+                          isChecked 
+                            ? 'bg-amber-50/90 border-amber-500 shadow-sm' 
+                            : 'bg-[#FAF7EE] border-slate-200 hover:border-amber-300'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                          isChecked ? 'bg-amber-500 border-amber-600 text-white' : 'border-slate-400 bg-white'
+                        }`}>
+                          {isChecked && <Check size={12} strokeWidth={3} />}
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-slate-900 leading-tight">{flag.label.split('(')[0]}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{flag.label.includes('(') ? `(${flag.label.split('(')[1]}` : ''}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* NTN, Delivery Notes, Payment Terms, Vehicle Type Choice */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Sender NTN / Tax ID (Optional)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={senderNTN} 
+                    onChange={e => setSenderNTN(e.target.value)} 
+                    placeholder="e.g. 1234567-8" 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono outline-none focus:bg-white focus:border-amber-500" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Payment Terms
+                  </label>
+                  <select 
+                    value={paymentTerms} 
+                    onChange={e => setPaymentTerms(e.target.value)} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-semibold"
+                  >
+                    {PAYMENT_TERMS_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Vehicle Type Preference
+                  </label>
+                  <select 
+                    value={vehicleTypeChoice} 
+                    onChange={e => setVehicleTypeChoice(e.target.value)} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500"
+                  >
+                    <option value="18-Wheeler Trailer">18-Wheeler Trailer (1.25x)</option>
+                    <option value="22-Wheeler">22-Wheeler Heavy (1.30x)</option>
+                    <option value="Container (40ft)">Container 40ft (1.20x)</option>
+                    <option value="Full Body Truck">Full Body Truck (1.15x)</option>
+                    <option value="Half Body Truck">Half Body Truck (1.00x)</option>
+                    <option value="Mini Truck">Mini Truck (0.85x)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Gate / Delivery Instructions
+                  </label>
+                  <input 
+                    type="text" 
+                    value={deliveryNotes} 
+                    onChange={e => setDeliveryNotes(e.target.value)} 
+                    placeholder="e.g. Gate 4, Unload at Bay 2" 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" 
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Tariff & Automated Fare Quotation Breakdown Card */}
+              <div className="bg-gradient-to-br from-[#0B101D] to-[#121929] border-2 border-amber-500/60 rounded-2xl p-5 text-white shadow-xl relative overflow-hidden">
+                <ChamakRibbon height="h-[3px]" className="absolute top-0 left-0 right-0" />
+                
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calculator size={18} className="text-amber-400" />
+                    <h4 className="text-xs font-mono font-bold text-amber-300 uppercase tracking-wider">
+                      Automated Highway Freight Tariff & Quotation
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40">
+                    NHA Distance Matrix: {tariffQuote.distanceKm} km
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 uppercase block">Base Freight</span>
+                    <span className="text-white font-bold text-sm">{tariffQuote.formatted.base}</span>
+                    <span className="text-[9px] text-slate-500 block mt-0.5">Rs. 45/Ton-km × {tariffQuote.vehicleMultiplier}x</span>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 uppercase block">Fuel Surcharge (8%)</span>
+                    <span className="text-amber-300 font-bold text-sm">{tariffQuote.formatted.fuel}</span>
+                    <span className="text-[9px] text-slate-500 block mt-0.5">National Fuel Index</span>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 uppercase block">Sales Tax (16% PRA/SRB)</span>
+                    <span className="text-sky-300 font-bold text-sm">{tariffQuote.formatted.tax}</span>
+                    <span className="text-[9px] text-slate-500 block mt-0.5">Provincial Services Tax</span>
+                  </div>
+
+                  <div className="bg-amber-950/40 p-3 rounded-xl border border-amber-500/50 flex flex-col justify-between">
+                    <span className="text-[10px] text-amber-300 font-black uppercase tracking-wider">Total Tariff Estimate</span>
+                    <span className="text-amber-400 font-black text-lg">{tariffQuote.formatted.total}</span>
+                    <span className="text-[9px] text-emerald-400 font-bold">{paymentTerms.toUpperCase()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Form actions */}
             <div className="flex gap-4">
               <button 
@@ -575,6 +861,15 @@ export default function BusinessDashboard() {
                             </h4>
                             <h4 className="font-bold text-slate-900 text-base mt-1 truncate">{c.title}</h4>
                             <p className="text-xs text-slate-600 mt-1 font-mono">{c.transporterName} &middot; {c.weight} tons</p>
+                            {c.specialHandling && Array.isArray(c.specialHandling) && c.specialHandling.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {c.specialHandling.map((sh, idx) => (
+                                  <span key={idx} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 uppercase">
+                                    {sh.replace('_', ' ')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${getStatusBadgeStyle(c.status)}`}>
                             {c.status}
@@ -629,30 +924,30 @@ export default function BusinessDashboard() {
                         </span>
                       </div>
 
-                      {/* Interactive MapViewer Displaying Assigned Truck Live Location */}
+                      {/* Interactive MapViewer Displaying Assigned Truck Live Location, Route Polyline & Driver Telemetry */}
                       {(() => {
                         const assignedTruckObj = trucks.find(t => 
                           selectedCargo.assignedTruck && (t.plateNumber === selectedCargo.assignedTruck || String(t.id) === String(selectedCargo.assignedTruck))
                         );
-                        const truckCoords = getCoordinatesForLocation(
-                          assignedTruckObj?.coordinates || 
-                          (assignedTruckObj?.lat && assignedTruckObj?.lng ? [assignedTruckObj.lat, assignedTruckObj.lng] : null) || 
-                          assignedTruckObj?.loc || 
-                          selectedCargo.destination || 
-                          selectedCargo.origin
-                        );
-                        const popupLabel = selectedCargo.assignedTruck 
-                          ? `Assigned Truck: ${selectedCargo.assignedTruck} (${assignedTruckObj?.truckType || 'Freight Carrier'}) • Driver: ${assignedTruckObj?.driverName || 'Verified'} • Status: ${selectedCargo.status}`
-                          : `Route: ${selectedCargo.origin} → ${selectedCargo.destination} • Status: ${selectedCargo.status}`;
+                        const associatedBkg = bookings.find(b => b.cargoId === selectedCargo._id && b.status !== 'Completed');
+                        
+                        const routeData = {
+                          origin: selectedCargo.origin,
+                          destination: selectedCargo.destination.split(',')[0],
+                          truckCoords: assignedTruckObj ? [assignedTruckObj.lat, assignedTruckObj.lng] : null,
+                          truckPlate: selectedCargo.assignedTruck,
+                          driverName: assignedTruckObj?.driverName,
+                          driverMobile: assignedTruckObj?.driverMobile,
+                          eta: associatedBkg?.eta
+                        };
 
                         return (
                           <div className="mt-4 mb-2">
                             <MapViewer 
-                              coordinates={truckCoords}
-                              popupText={popupLabel}
+                              route={routeData}
                               title={selectedCargo.assignedTruck ? `TRUCK ${selectedCargo.assignedTruck} LIVE GPS` : 'CARGO ROUTE TELEMETRY'}
                               color={selectedCargo.status === 'In Transit' ? 'neon-blue' : 'rose'}
-                              height="260px"
+                              height="280px"
                             />
                           </div>
                         );
@@ -680,6 +975,14 @@ export default function BusinessDashboard() {
                             <p className="font-semibold text-[#B91C1C] font-mono mt-0.5">{selectedCargo.assignedTruck}</p>
                           </div>
                         )}
+                        <div className="bg-[#FAF7EE] p-3 rounded-xl border border-amber-200">
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Packaging</p>
+                          <p className="font-semibold text-slate-900 mt-0.5">{selectedCargo.packagingType || 'Cartons / Boxes'}</p>
+                        </div>
+                        <div className="bg-[#FAF7EE] p-3 rounded-xl border border-amber-200">
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Billing Terms</p>
+                          <p className="font-semibold text-emerald-800 mt-0.5">{selectedCargo.paymentTerms || 'Prepaid'}</p>
+                        </div>
                         {/* If booking counter price or ETA exists, show it */}
                         {(() => {
                           const associatedBkg = bookings.find(b => b.cargoId === selectedCargo._id && b.status !== 'Completed');
@@ -698,6 +1001,18 @@ export default function BusinessDashboard() {
                             </>
                           ) : null;
                         })()}
+                        {selectedCargo.specialHandling && Array.isArray(selectedCargo.specialHandling) && selectedCargo.specialHandling.length > 0 && (
+                          <div className="col-span-2 md:col-span-3 bg-amber-50/80 p-3 rounded-xl border border-amber-300">
+                            <p className="text-[9px] font-black text-amber-900 uppercase tracking-wider mb-1.5">Special Handling Directives</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedCargo.specialHandling.map((h, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-300">
+                                  ⚠ {h.replace('_', ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Transit Progression Line */}

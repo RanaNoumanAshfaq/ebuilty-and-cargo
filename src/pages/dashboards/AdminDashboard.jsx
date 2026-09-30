@@ -3,12 +3,16 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { 
   Users, FileText, Activity, AlertTriangle, Check, X, Shield, 
   Package, Trash2, CheckCircle, Loader2, ArrowRight, Truck, 
-  Mail, Phone, Clock, Eye, AlertCircle, FileCheck, Ban, Unlock
+  Mail, Phone, Clock, Eye, AlertCircle, FileCheck, Ban, Unlock,
+  MessageSquare, QrCode, Send
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { adminAPI, logisticsAPI, socket } from '../../api';
+
 import { generateBiltyPDF } from '../../utils/generateBiltyPDF';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
+import MapViewer from '../../components/MapViewer';
 
 export default function AdminDashboard() {
   const { userData } = useAuth();
@@ -17,6 +21,7 @@ export default function AdminDashboard() {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [allShipments, setAllShipments] = useState([]);
+  const [allTrucks, setAllTrucks] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [stats, setStats] = useState({
@@ -48,14 +53,25 @@ export default function AdminDashboard() {
   const [viewingUserTrucks, setViewingUserTrucks] = useState([]);
   const [loadingUserTrucks, setLoadingUserTrucks] = useState(false);
 
+  // WhatsApp Gateway State
+  const [whatsappStatus, setWhatsappStatus] = useState({ status: 'disconnected', isReady: false, hasQr: false, qr: null });
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const [whatsappQrDataUrl, setWhatsappQrDataUrl] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [testMessage, setTestMessage] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+
   const fetchData = async () => {
     try {
-      const [statsRes, usersRes, shipmentsRes, complaintsRes, activityRes] = await Promise.all([
+      const [statsRes, usersRes, shipmentsRes, complaintsRes, activityRes, trucksRes] = await Promise.all([
         adminAPI.getStats(),
         adminAPI.getUsers(),
         adminAPI.getShipments(),
         logisticsAPI.getComplaints(),
-        adminAPI.getActivity()
+        adminAPI.getActivity(),
+        logisticsAPI.getTrucks({})
       ]);
 
       setStats(statsRes.data);
@@ -67,6 +83,7 @@ export default function AdminDashboard() {
       setAllShipments(shipmentsRes.data);
       setComplaints(complaintsRes.data);
       setActivityLogs(activityRes.data);
+      setAllTrucks(trucksRes?.data || []);
       setLoading(false);
     } catch (e) {
       console.error("Error fetching admin data:", e);
@@ -77,14 +94,39 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
 
+    // Fetch initial WhatsApp gateway status
+    adminAPI.getWhatsAppStatus().then(res => {
+      setWhatsappStatus(res.data);
+      if (res.data.qr) {
+        QRCode.toDataURL(res.data.qr, { margin: 1, width: 260 }).then(setWhatsappQrDataUrl).catch(() => {});
+      }
+    }).catch(() => {});
+
     socket.on('booking_updated', fetchData);
     socket.on('notification', fetchData);
+
+    socket.on('whatsapp_qr', (data) => {
+      setWhatsappStatus(prev => ({ ...prev, status: 'qr_ready', qr: data.qr, hasQr: true }));
+      if (data.qr) {
+        QRCode.toDataURL(data.qr, { margin: 1, width: 260 }).then(setWhatsappQrDataUrl).catch(() => {});
+      }
+    });
+
+    socket.on('whatsapp_status', (data) => {
+      setWhatsappStatus(prev => ({ ...prev, status: data.status, isReady: data.status === 'ready' }));
+      if (data.status === 'ready') {
+        setWhatsappQrDataUrl('');
+      }
+    });
 
     return () => {
       socket.off('booking_updated');
       socket.off('notification');
+      socket.off('whatsapp_qr');
+      socket.off('whatsapp_status');
     };
   }, []);
+
 
   const handleVerification = async (userId, newStatus) => {
     try {
@@ -235,12 +277,32 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* WhatsApp Gateway Quick Badge */}
+          <button
+            onClick={() => setWhatsappModalOpen(true)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shadow-sm transition-all border cursor-pointer ${
+              whatsappStatus.isReady
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                : whatsappStatus.hasQr
+                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
+                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+            }`}
+            title="Click to view WhatsApp Gateway status or scan QR code"
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${
+              whatsappStatus.isReady ? 'bg-emerald-500' : whatsappStatus.hasQr ? 'bg-amber-500' : 'bg-slate-400'
+            }`} />
+            <MessageSquare size={14} className={whatsappStatus.isReady ? 'text-emerald-700' : 'text-amber-700'} />
+            <span>{whatsappStatus.isReady ? 'WhatsApp: Connected' : whatsappStatus.hasQr ? 'WhatsApp: Scan QR' : 'WhatsApp: Offline'}</span>
+          </button>
+
           <div className="flex gap-2 bg-white border-2 border-purple-400 px-4 py-2 rounded-xl text-xs text-purple-900 font-mono shadow-sm">
             <Clock size={14} className="text-rose-600" />
             <span>Session: {new Date().toLocaleDateString()}</span>
           </div>
         </div>
       </div>
+
 
       {/* Decorative Chamak Ribbon */}
       <ChamakRibbon height="h-[5px]" className="rounded-full mb-6 relative z-10" />
@@ -337,6 +399,35 @@ export default function AdminDashboard() {
                 <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-800 border border-orange-300 group-hover:scale-110 transition-transform relative z-10 shadow-sm">
                   <Truck size={22} />
                 </div>
+              </div>
+            </div>
+
+            {/* National Fleet Overview Map */}
+            <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 shadow-md relative overflow-hidden text-left">
+              <SindhiTruckTexture />
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <TruckTaj className="text-amber-600 w-5 h-4" />
+                    <h3 className="text-xs font-bold text-slate-800 tracking-wider uppercase font-mono">
+                      {isUrdu ? 'ملک گیر لائیو فلیٹ راڈار اور ٹریفک ٹیلی میٹری' : 'Nationwide Fleet Radar & Logistics Telemetry'}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-mono">
+                    <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm" />
+                      {allTrucks.filter(t => t.status === 'Available').length} Available
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sky-700 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block shadow-sm" />
+                      {allTrucks.filter(t => t.status === 'In Transit').length} In Transit
+                    </span>
+                    <span className="text-slate-500 font-bold">
+                      Total: {allTrucks.length} Units
+                    </span>
+                  </div>
+                </div>
+                <MapViewer trucks={allTrucks} height="400px" title="NATIONWIDE FLEET RADAR & ACTIVE SHIPMENTS" />
               </div>
             </div>
 
@@ -1268,6 +1359,145 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* WHATSAPP GATEWAY MODAL */}
+      {whatsappModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border-2 border-emerald-500/80 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl">
+            <button
+              onClick={() => { setWhatsappModalOpen(false); setTestResult(null); }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700">
+                <MessageSquare size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">WhatsApp Notification Gateway</h3>
+                <p className="text-xs text-slate-600 font-medium">Self-hosted automated alerts for shipments & deliveries</p>
+              </div>
+            </div>
+
+            {/* Connection Status Banner */}
+            <div className={`p-4 rounded-xl border mb-5 flex items-center justify-between ${
+              whatsappStatus.isReady 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+                : whatsappStatus.hasQr 
+                ? 'bg-amber-50 border-amber-300 text-amber-900' 
+                : 'bg-slate-100 border-slate-300 text-slate-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${whatsappStatus.isReady ? 'bg-emerald-500' : whatsappStatus.hasQr ? 'bg-amber-500 animate-pulse' : 'bg-slate-400'}`} />
+                <span className="font-extrabold text-sm">
+                  {whatsappStatus.isReady 
+                    ? 'Gateway Online & Authenticated' 
+                    : whatsappStatus.hasQr 
+                    ? 'Action Required: Scan QR Code' 
+                    : 'Gateway Initializing...'}
+                </span>
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/80 border text-slate-700 uppercase">
+                {whatsappStatus.status}
+              </span>
+            </div>
+
+            {/* QR Code Section (if waiting for link) */}
+            {!whatsappStatus.isReady && (
+              <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-xl mb-5 text-center">
+                <p className="text-xs font-bold text-slate-700 mb-3">
+                  Open WhatsApp on your phone ➔ Linked Devices ➔ Link a Device ➔ Scan:
+                </p>
+                {whatsappQrDataUrl ? (
+                  <div className="p-3 bg-white border-2 border-emerald-500 rounded-xl shadow-md">
+                    <img src={whatsappQrDataUrl} alt="WhatsApp QR Code" className="w-56 h-56 mx-auto" />
+                  </div>
+                ) : (
+                  <div className="w-56 h-56 flex flex-col items-center justify-center bg-white border border-dashed border-slate-300 rounded-xl">
+                    <QrCode size={40} className="text-slate-400 animate-pulse mb-2" />
+                    <span className="text-xs text-slate-500">Generating live QR code...</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500 mt-3">Session is saved locally in <code className="bg-slate-200 px-1 py-0.5 rounded font-mono">.wwebjs_auth</code>. You only scan once.</p>
+              </div>
+            )}
+
+            {/* Automated Alerts Summary */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 text-xs text-slate-700 space-y-1.5">
+              <p className="font-extrabold text-slate-900 mb-1">⚡ Automatic WhatsApp Triggers Configured:</p>
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <CheckCircle size={13} className="text-emerald-600 shrink-0" />
+                <span><strong>New Shipment:</strong> Instant WhatsApp to Shipper & Consignees</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <CheckCircle size={13} className="text-emerald-600 shrink-0" />
+                <span><strong>Booking Offer:</strong> WhatsApp offer alert to Driver / Truck Owner</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <CheckCircle size={13} className="text-emerald-600 shrink-0" />
+                <span><strong>In Transit:</strong> Receiver gets truck details & <strong>Secret Delivery Code (OTP)</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <CheckCircle size={13} className="text-emerald-600 shrink-0" />
+                <span><strong>Delivered:</strong> Shipper notified with Bilty number & verified POD</span>
+              </div>
+            </div>
+
+            {/* Quick Test Message Form */}
+            <div className="border-t border-slate-200 pt-4">
+              <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 mb-2">Send Test WhatsApp Message</h4>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder="03001234567 or +923..."
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                />
+                <button
+                  disabled={testSending || !whatsappStatus.isReady || !testPhone}
+                  onClick={async () => {
+                    setTestSending(true);
+                    setTestResult(null);
+                    try {
+                      const res = await adminAPI.sendWhatsAppTest({
+                        phone: testPhone,
+                        message: testMessage || '🚚 Greetings from E-Cargo-Bilty! WhatsApp notification gateway is active.'
+                      });
+                      setTestResult(res.data.success ? 'Message sent successfully!' : `Failed: ${res.data.reason || 'check number'}`);
+                    } catch (err) {
+                      setTestResult('Error sending test message');
+                    } finally {
+                      setTestSending(false);
+                    }
+                  }}
+                  className="btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {testSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  <span>Send</span>
+                </button>
+              </div>
+              {testResult && (
+                <p className={`text-xs font-bold mt-1 ${testResult.startsWith('Message sent') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {testResult}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 text-right">
+              <button
+                onClick={() => { setWhatsappModalOpen(false); setTestResult(null); }}
+                className="px-5 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

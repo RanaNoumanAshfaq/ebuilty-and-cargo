@@ -3,11 +3,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { 
   Truck, Navigation, List, MapPin, UploadCloud, AlertCircle, 
   CheckCircle, Plus, X, Trash2, Edit, Send, MessageSquare, 
-  Calendar, Clock, Check
+  Calendar, Clock, Check, Camera, FileCheck, PenTool, RotateCcw, AlertTriangle, ShieldCheck, Radio
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { logisticsAPI, authAPI, socket } from '../../api';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
+import MapViewer, { CITY_COORDINATES, getCoordinatesForLocation } from '../../components/MapViewer';
 
 const safeJsonParse = (val, fallback) => {
   if (!val) return fallback;
@@ -19,6 +20,12 @@ const safeJsonParse = (val, fallback) => {
     return fallback;
   }
 };
+
+const PAKISTAN_CITIES = [
+  'Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Islamabad', 
+  'Multan', 'Sukkur', 'Peshawar', 'Quetta', 'Gujranwala', 
+  'Sialkot', 'Hyderabad', 'Gwadar', 'Hub'
+];
 
 export default function TruckOwnerDashboard() {
   const { userData, currentUser } = useAuth();
@@ -48,6 +55,16 @@ export default function TruckOwnerDashboard() {
   const [eta, setEta] = useState('');
   const [completingBooking, setCompletingBooking] = useState(null);
   const [pod, setPod] = useState('');
+
+  // Touchscreen e-POD states
+  const [deliveryCode, setDeliveryCode] = useState('');
+  const [podPhotoFile, setPodPhotoFile] = useState(null);
+  const [conditionStatus, setConditionStatus] = useState('Good Condition');
+  const [discrepancyNotes, setDiscrepancyNotes] = useState('');
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  const signatureCanvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
 
   // Messages state
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -269,17 +286,104 @@ export default function TruckOwnerDashboard() {
     }
   };
 
+  // Real-time location updater for fleet inventory
+  const handleLocationUpdate = async (truckId, newCity) => {
+    try {
+      const coords = CITY_COORDINATES[newCity.toLowerCase()] || [31.5204, 74.3587];
+      await logisticsAPI.updateTruck(truckId, { loc: newCity, lat: coords[0], lng: coords[1] });
+      setTrucks(trucks.map(t => (t._id === truckId || t.id === truckId) ? { ...t, loc: newCity, lat: coords[0], lng: coords[1], coordinates: coords } : t));
+    } catch (e) {
+      console.error('Error updating truck location:', e);
+    }
+  };
+
+  // Canvas drawing event handlers for touchscreen e-POD signature
+  const startDrawing = (e) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#0B101D';
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setHasSignature(true);
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+  };
+
   const handleConfirmDelivery = async (e) => {
     e.preventDefault();
-    if (!pod) return;
+    if (!pod && !hasSignature) {
+      alert("Please provide PoD notes or consignee signature!");
+      return;
+    }
+    setIsSubmittingDelivery(true);
     try {
-      await logisticsAPI.completeBooking(completingBooking._id || completingBooking.id, { pod });
+      let signatureData = null;
+      if (hasSignature && signatureCanvasRef.current) {
+        signatureData = signatureCanvasRef.current.toDataURL('image/png');
+      }
+
+      let uploadedPhotoUrl = null;
+      if (podPhotoFile) {
+        uploadedPhotoUrl = await logisticsAPI.uploadFile(podPhotoFile);
+      }
+
+      await logisticsAPI.completeBooking(completingBooking._id || completingBooking.id, {
+        pod: pod || 'Delivered with verified digital signature',
+        deliveryCode: deliveryCode || null,
+        receiverSignature: signatureData || null,
+        podPhotoUrl: uploadedPhotoUrl || null,
+        conditionStatus: conditionStatus || 'Good Condition',
+        discrepancyNotes: conditionStatus === 'Damage / Shortage Reported' ? discrepancyNotes : null
+      });
+
       setCompletingBooking(null);
       setPod('');
+      setDeliveryCode('');
+      setPodPhotoFile(null);
+      setConditionStatus('Good Condition');
+      setDiscrepancyNotes('');
+      setHasSignature(false);
       setSelectedBooking(null);
       fetchData();
+      alert('Trip marked as Delivered! Electronic Proof of Delivery (e-POD) and signature recorded.');
     } catch (error) {
       console.error(error);
+      alert('Error completing delivery: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsSubmittingDelivery(false);
     }
   };
 
@@ -436,6 +540,22 @@ export default function TruckOwnerDashboard() {
               </button>
             </div>
 
+            {/* Live Fleet Radar Map */}
+            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-5 shadow-md text-left">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <TruckTaj className="text-amber-600 w-5 h-4" />
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
+                    {isUrdu ? 'لائیو فلیٹ راڈار اور ٹرمینل ڈپوز' : 'Live Fleet Radar & Depot Terminals'}
+                  </h3>
+                </div>
+                <span className="text-[11px] font-mono font-bold text-slate-500">
+                  {trucks.length} Units Active
+                </span>
+              </div>
+              <MapViewer trucks={trucks} height="360px" title="MY FLEET RADAR & ACTIVE TELEMETRY" />
+            </div>
+
             {/* Trucks list */}
             <div className="space-y-4">
               {trucks.map(truck => (
@@ -458,6 +578,23 @@ export default function TruckOwnerDashboard() {
                           {truck.driverMobile && <span className="text-amber-800 font-mono ml-2 font-semibold">({truck.driverMobile})</span>}
                           {truck.loc && <span className="text-slate-500 ml-2">&bull; Depot: <span className="text-slate-700 font-medium">{truck.loc}</span></span>}
                         </p>
+
+                        {/* Interactive Relocate Depot Dropdown */}
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 font-mono">
+                            <MapPin size={13} className="text-red-600" /> Relocate Depot:
+                          </span>
+                          <select
+                            value={PAKISTAN_CITIES.find(c => c.toLowerCase() === (truck.loc || '').toLowerCase()) || truck.loc || 'Lahore'}
+                            onChange={(e) => handleLocationUpdate(truck._id || truck.id, e.target.value)}
+                            className="text-xs bg-[#FAF7EE] border border-amber-300 rounded-lg px-2.5 py-1 text-slate-800 font-semibold outline-none focus:border-red-600 focus:bg-white cursor-pointer shadow-xs"
+                            title="Update truck real-time GPS terminal location"
+                          >
+                            {PAKISTAN_CITIES.map(city => (
+                              <option key={city} value={city}>{city}</option>
+                            ))}
+                          </select>
+                        </div>
 
                         {/* Documents pills list */}
                         <div className="flex flex-wrap gap-2 mt-4">
@@ -1080,22 +1217,22 @@ export default function TruckOwnerDashboard() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-            <div className="bg-white w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl overflow-hidden">
+            <div className="bg-white w-full max-w-xl max-h-[90vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl">
               <ChamakRibbon height="h-[5px]" />
               <button onClick={() => setCompletingBooking(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X size={20} />
               </button>
               <div className="flex items-center gap-2 mb-1 mt-2 text-left">
                 <TruckTaj className="text-amber-600 w-4 h-3" />
-                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Proof of Delivery</span>
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Touchscreen e-POD (Electronic Proof of Delivery)</span>
               </div>
-              <h2 className="text-2xl font-black text-slate-900 mb-1 text-left font-sans">{isUrdu ? 'ترسیل مکمل کریں' : 'Mark as Delivered'}</h2>
-              <p className="text-xs text-slate-600 mb-4 text-left">Submit final delivery confirmation (OTP / receiver signature) to complete the trip.</p>
+              <h2 className="text-2xl font-black text-slate-900 mb-1 text-left font-sans">{isUrdu ? 'ترسیل مکمل کریں' : 'Confirm Delivery & e-POD'}</h2>
+              <p className="text-xs text-slate-600 mb-4 text-left">Capture consignee physical touchscreen signature, stamped gate pass photo, and verify delivery status.</p>
 
               {recipients.length > 0 && (
                 <div className="bg-amber-50/70 border border-amber-300 rounded-2xl p-3 mb-4 text-left space-y-1">
                   <p className="text-[10px] font-black text-amber-900 uppercase tracking-wider mb-1.5">
-                    Delivery Recipients
+                    Authorized Delivery Recipients
                   </p>
                   {recipients.map((r, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-xs">
@@ -1111,23 +1248,127 @@ export default function TruckOwnerDashboard() {
               )}
 
               <form onSubmit={handleConfirmDelivery} className="space-y-4 text-left">
+                {/* Touchscreen Digital Signature Canvas */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Proof of Delivery (PoD) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <PenTool size={14} className="text-red-700" /> Receiver / Consignee Signature *
+                    </label>
+                    {hasSignature && (
+                      <button
+                        type="button"
+                        onClick={clearSignature}
+                        className="text-[11px] text-red-600 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw size={12} /> Clear Signature
+                      </button>
+                    )}
+                  </div>
+                  <div className="border-2 border-dashed border-amber-300 rounded-2xl bg-white overflow-hidden relative shadow-inner">
+                    <canvas
+                      ref={signatureCanvasRef}
+                      width={520}
+                      height={120}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      className="w-full h-32 touch-none cursor-crosshair bg-white"
+                    />
+                    {!hasSignature && (
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-400 text-xs font-mono">
+                        ✍ Sign on screen with finger or stylus
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stamped Gate Pass / Challan Photo Upload */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Camera size={14} className="text-amber-700" /> Stamped Delivery Challan / Gate Pass Photo
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={e => setPodPhotoFile(e.target.files[0])}
+                    className="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-900 hover:file:bg-amber-200 cursor-pointer"
+                  />
+                  {podPhotoFile && (
+                    <p className="text-[11px] text-emerald-700 font-bold mt-1">
+                      Attached: {podPhotoFile.name} ({(podPhotoFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
+
+                {/* Security Delivery Code & Condition */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <ShieldCheck size={14} className="text-emerald-600" /> Security Delivery Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={deliveryCode}
+                      onChange={e => setDeliveryCode(e.target.value)}
+                      placeholder="e.g. 8821"
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono tracking-widest outline-none focus:bg-white focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Cargo Condition</label>
+                    <select
+                      value={conditionStatus}
+                      onChange={e => setConditionStatus(e.target.value)}
+                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs font-medium outline-none focus:bg-white focus:border-amber-500"
+                    >
+                      <option value="Good Condition">Full Delivery in Good Condition</option>
+                      <option value="Damage / Shortage Reported">Damage / Shortage Reported</option>
+                    </select>
+                  </div>
+                </div>
+
+                {conditionStatus === 'Damage / Shortage Reported' && (
+                  <div>
+                    <label className="block text-xs font-bold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <AlertTriangle size={13} /> Discrepancy & Damage Notes
+                    </label>
+                    <textarea
+                      value={discrepancyNotes}
+                      onChange={e => setDiscrepancyNotes(e.target.value)}
+                      placeholder="Describe damaged cartons, missing seals, or weight discrepancy..."
+                      className="w-full bg-red-50/50 border border-red-300 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-red-500"
+                      rows={2}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Proof of Delivery Notes</label>
                   <textarea
-                    required
                     value={pod}
                     onChange={e => setPod(e.target.value)}
-                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 h-24 text-sm outline-none focus:bg-white focus:border-amber-500"
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 h-20 text-xs outline-none focus:bg-white focus:border-amber-500"
                     placeholder={podPlaceholder}
                   />
                   {allNames && (
                     <p className="text-[10px] text-slate-600 mt-1">
-                      Tip: Mention <span className="text-red-700 font-bold">{allNames}</span> in your PoD for full traceability.
+                      Tip: Mention <span className="text-red-700 font-bold">{allNames}</span> in your PoD notes for audit verification.
                     </p>
                   )}
                 </div>
-                <button type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer shadow-md">
-                  {isUrdu ? 'ترسیل کی تصدیق کریں' : 'Confirm Delivery Completion'}
+
+                <button 
+                  disabled={isSubmittingDelivery}
+                  type="submit" 
+                  className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {isSubmittingDelivery ? (isUrdu ? 'ترسیل جمع ہو رہی ہے...' : 'Verifying & Submitting e-POD...') : (isUrdu ? 'ترسیل کی تصدیق کریں' : 'Confirm Delivery Completion')}
                 </button>
               </form>
             </div>

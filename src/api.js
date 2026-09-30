@@ -60,6 +60,8 @@ export const adminAPI = {
   updateUserStatus: (id, status, reason) => api.patch(`/users/${id}`, { status, reason }),
   getShipments: () => api.get('/admin/shipments'),
   getActivity: () => api.get('/admin/activity'),
+  getWhatsAppStatus: () => api.get('/whatsapp/status'),
+  sendWhatsAppTest: (data) => api.post('/whatsapp/test', data),
 };
 
 export { socket };

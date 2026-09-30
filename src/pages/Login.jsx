@@ -150,7 +150,44 @@ export default function Login() {
             </button>
           </form>
 
-          <div className={`mt-6 text-center text-xs text-slate-600 ${isUrdu ? 'font-urdu text-sm' : ''}`}>
+          {/* Quick Demo Credentials 1-Click Fill */}
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">
+              Quick Demo Logins (1-Click Fill)
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => { setEmail('admin@ecargo.com'); setPassword('password123'); }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium transition-colors text-left"
+              >
+                👑 <strong>Admin</strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmail('business@ecargo.com'); setPassword('password123'); }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium transition-colors text-left"
+              >
+                🏢 <strong>Business</strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmail('transporter@ecargo.com'); setPassword('password123'); }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium transition-colors text-left"
+              >
+                🚛 <strong>Transporter</strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmail('driver@ecargo.com'); setPassword('password123'); }}
+                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-lg font-medium transition-colors text-left"
+              >
+                🚚 <strong>Driver / Owner</strong>
+              </button>
+            </div>
+          </div>
+
+          <div className={`mt-5 text-center text-xs text-slate-600 ${isUrdu ? 'font-urdu text-sm' : ''}`}>
             {t('dontHaveAccount')}{' '}
             <Link to="/register" className="text-red-700 hover:text-amber-700 transition-colors font-bold underline">
               {t('registerHere')}
