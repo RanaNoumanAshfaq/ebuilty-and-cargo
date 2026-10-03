@@ -11,8 +11,10 @@ import QRCode from 'qrcode';
 import { adminAPI, logisticsAPI, socket } from '../../api';
 
 import { generateBiltyPDF } from '../../utils/generateBiltyPDF';
+import BiltyModal from '../../components/BiltyModal';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer from '../../components/MapViewer';
+import { formatPhone } from '../../utils/validation';
 
 export default function AdminDashboard() {
   const { userData } = useAuth();
@@ -20,6 +22,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [biltyModalBooking, setBiltyModalBooking] = useState(null);
   const [allShipments, setAllShipments] = useState([]);
   const [allTrucks, setAllTrucks] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -187,7 +190,7 @@ export default function AdminDashboard() {
       destination: shipment.destination,
       weight: shipment.weight
     };
-    generateBiltyPDF(biltyData);
+    setBiltyModalBooking(biltyData);
   };
 
   const getRoleStyle = (role) => {
@@ -249,7 +252,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative page-enter">
       {/* Truck Art Pattern Ribbon */}
       <TruckPatternBorder height="h-7" className="rounded-xl mb-4 shadow-sm" />
 
@@ -282,10 +285,10 @@ export default function AdminDashboard() {
             onClick={() => setWhatsappModalOpen(true)}
             className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shadow-sm transition-all border cursor-pointer ${
               whatsappStatus.isReady
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                ? 'bg-emerald-50/90 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                 : whatsappStatus.hasQr
-                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
-                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
+                : 'bg-slate-100/90 text-slate-700 border-slate-300 hover:bg-slate-200'
             }`}
             title="Click to view WhatsApp Gateway status or scan QR code"
           >
@@ -296,8 +299,8 @@ export default function AdminDashboard() {
             <span>{whatsappStatus.isReady ? 'WhatsApp: Connected' : whatsappStatus.hasQr ? 'WhatsApp: Scan QR' : 'WhatsApp: Offline'}</span>
           </button>
 
-          <div className="flex gap-2 bg-white border-2 border-purple-400 px-4 py-2 rounded-xl text-xs text-purple-900 font-mono shadow-sm">
-            <Clock size={14} className="text-rose-600" />
+          <div className="flex gap-2 bg-white/90 backdrop-blur-md border-2 border-purple-400 px-4 py-2 rounded-xl text-xs text-purple-900 font-mono shadow-sm">
+            <Clock size={14} className="text-rose-600 animate-pulse" />
             <span>Session: {new Date().toLocaleDateString()}</span>
           </div>
         </div>
@@ -318,10 +321,10 @@ export default function AdminDashboard() {
                 setSelectedPendingUser(null);
                 setShowRejectForm(false);
               }}
-              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              className={`pb-3 text-sm font-semibold transition-all duration-300 relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id 
-                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:scale-[1.01]'
               }`}
             >
               {tab.name}
@@ -344,7 +347,7 @@ export default function AdminDashboard() {
             {/* Metric KPI cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Active Shipments */}
-              <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:border-amber-400 transition-all shadow-md">
+              <div className="glass-card-3d border border-white/60 shadow-xl rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
                 <SindhiTruckTexture />
                 <div className="text-left relative z-10">
                   <p className="text-[11px] font-extrabold text-slate-600 tracking-wider uppercase">Active Shipments</p>
@@ -353,13 +356,13 @@ export default function AdminDashboard() {
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping inline-block" /> +8 today
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center text-[#B91C1C] border border-red-200 group-hover:scale-110 transition-transform relative z-10 shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-red-100 border border-red-200 text-[#B91C1C] flex items-center justify-center group-hover:scale-110 transition-transform relative z-10 shadow-sm">
                   <Package size={22} />
                 </div>
               </div>
 
               {/* Total Bilties */}
-              <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:border-amber-400 transition-all shadow-md">
+              <div className="glass-card-3d border border-white/60 shadow-xl rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
                 <SindhiTruckTexture />
                 <div className="text-left relative z-10">
                   <p className="text-[11px] font-extrabold text-slate-600 tracking-wider uppercase">Total Bilties Generated</p>
@@ -372,7 +375,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Registered Users */}
-              <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:border-amber-400 transition-all shadow-md">
+              <div className="glass-card-3d border border-white/60 shadow-xl rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
                 <SindhiTruckTexture />
                 <div className="text-left relative z-10">
                   <p className="text-[11px] font-extrabold text-slate-600 tracking-wider uppercase">Registered Users</p>
@@ -387,7 +390,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Truck Utilization */}
-              <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:border-amber-400 transition-all shadow-md">
+              <div className="glass-card-3d border border-white/60 shadow-xl rounded-2xl p-6 flex justify-between items-center relative overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
                 <SindhiTruckTexture />
                 <div className="text-left relative z-10">
                   <p className="text-[11px] font-extrabold text-slate-600 tracking-wider uppercase">Truck Utilization</p>
@@ -403,7 +406,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* National Fleet Overview Map */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 shadow-md relative overflow-hidden text-left">
+            <div className="glass-card border border-white/60 rounded-2xl p-6 shadow-xl relative overflow-hidden text-left">
               <SindhiTruckTexture />
               <div className="relative z-10">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -1086,8 +1089,8 @@ export default function AdminDashboard() {
 
       {/* ─── User Detail Modal (opens from Users tab) ─────────────────────────── */}
       {viewingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-8 overflow-y-auto">
-          <div className="bg-white border-2 border-amber-300 rounded-2xl shadow-2xl w-full max-w-3xl relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4 py-8 overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-2xl border-2 border-amber-400/90 rounded-2xl shadow-2xl w-full max-w-3xl relative overflow-hidden modal-enter">
             {/* Top Chamak Patti decoration */}
             <ChamakRibbon height="h-1.5" />
             
@@ -1361,8 +1364,8 @@ export default function AdminDashboard() {
 
       {/* WHATSAPP GATEWAY MODAL */}
       {whatsappModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border-2 border-emerald-500/80 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white/95 backdrop-blur-2xl border-2 border-emerald-500/80 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl modal-enter">
             <button
               onClick={() => { setWhatsappModalOpen(false); setTestResult(null); }}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
@@ -1450,9 +1453,12 @@ export default function AdminDashboard() {
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
-                  placeholder="03001234567 or +923..."
+                  placeholder="0300-1234567 or +923..."
                   value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTestPhone(val.startsWith('03') ? formatPhone(val) : val);
+                  }}
                   className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
                 />
                 <button
@@ -1496,6 +1502,12 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Digital e-Bilty Preview & Print Modal */}
+      <BiltyModal 
+        booking={biltyModalBooking} 
+        onClose={() => setBiltyModalBooking(null)} 
+      />
 
     </div>
   );

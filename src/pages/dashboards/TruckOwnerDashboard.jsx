@@ -3,12 +3,28 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { 
   Truck, Navigation, List, MapPin, UploadCloud, AlertCircle, 
   CheckCircle, Plus, X, Trash2, Edit, Send, MessageSquare, 
-  Calendar, Clock, Check, Camera, FileCheck, PenTool, RotateCcw, AlertTriangle, ShieldCheck, Radio
+  Calendar, Clock, Check, Camera, FileCheck, PenTool, RotateCcw, AlertTriangle, ShieldCheck, Radio, FileText
 } from 'lucide-react';
+import BiltyModal from '../../components/BiltyModal';
 import { useState, useEffect, useRef } from 'react';
 import { logisticsAPI, authAPI, socket } from '../../api';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer, { CITY_COORDINATES, getCoordinatesForLocation } from '../../components/MapViewer';
+import SearchSelect from '../../components/SearchSelect';
+import UnitInput from '../../components/UnitInput';
+import FormField from '../../components/FormField';
+import { 
+  PAKISTAN_CITIES, 
+  VEHICLE_TYPES, 
+  WEIGHT_UNITS 
+} from '../../data/logisticsData';
+import { 
+  formatPhone, 
+  validatePhone, 
+  validateLicensePlate, 
+  validatePositiveNumber, 
+  validateRequired 
+} from '../../utils/validation';
 
 const safeJsonParse = (val, fallback) => {
   if (!val) return fallback;
@@ -20,12 +36,6 @@ const safeJsonParse = (val, fallback) => {
     return fallback;
   }
 };
-
-const PAKISTAN_CITIES = [
-  'Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Islamabad', 
-  'Multan', 'Sukkur', 'Peshawar', 'Quetta', 'Gujranwala', 
-  'Sialkot', 'Hyderabad', 'Gwadar', 'Hub'
-];
 
 export default function TruckOwnerDashboard() {
   const { userData, currentUser } = useAuth();
@@ -40,18 +50,22 @@ export default function TruckOwnerDashboard() {
   const [newTruck, setNewTruck] = useState({ 
     id: '', 
     capacity: '', 
+    capacityUnit: 'ton',
     loc: '', 
-    truckType: 'Full Body', 
+    truckType: 'Full Body Truck', 
     driverName: '', 
     driverMobile: '', 
     fitnessDoc: '', 
     insuranceDoc: '' 
   });
+  const [truckFormErrors, setTruckFormErrors] = useState({});
   const [editTruckData, setEditTruckData] = useState(null);
+  const [editTruckErrors, setEditTruckErrors] = useState({});
 
   // Bookings state
   const [bookings, setBookings] = useState([]);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [biltyModalBooking, setBiltyModalBooking] = useState(null);
   const [eta, setEta] = useState('');
   const [completingBooking, setCompletingBooking] = useState(null);
   const [pod, setPod] = useState('');
@@ -173,11 +187,34 @@ export default function TruckOwnerDashboard() {
 
   const handleAddTruckSubmit = async (e) => {
     e.preventDefault();
+    const errors = {};
+    const plateErr = validateLicensePlate(newTruck.id, isUrdu);
+    if (plateErr) errors.id = plateErr;
+
+    const capErr = validatePositiveNumber(newTruck.capacity, 'Payload Capacity', isUrdu);
+    if (capErr) errors.capacity = capErr;
+
+    if (!newTruck.loc) {
+      errors.loc = isUrdu ? 'براہ کرم گاڑی کا موجودہ مقام منتخب کریں' : 'Please select a base depot / city';
+    }
+
+    const driverNameErr = validateRequired(newTruck.driverName, 'Driver Name', isUrdu);
+    if (driverNameErr) errors.driverName = driverNameErr;
+
+    const phoneErr = validatePhone(newTruck.driverMobile, isUrdu);
+    if (phoneErr) errors.driverMobile = phoneErr;
+
+    if (Object.keys(errors).length > 0) {
+      setTruckFormErrors(errors);
+      return;
+    }
+
     setAddingTruck(true);
     try {
+      const fullCapacity = `${newTruck.capacity} ${newTruck.capacityUnit || 'ton'}`;
       await logisticsAPI.addTruck({
-        id: newTruck.id,
-        capacity: newTruck.capacity,
+        id: (newTruck.id || '').toUpperCase().trim(),
+        capacity: fullCapacity,
         loc: newTruck.loc,
         truckType: newTruck.truckType,
         driverName: newTruck.driverName,
@@ -188,12 +225,14 @@ export default function TruckOwnerDashboard() {
       });
       setShowAddModal(false);
       setNewTruck({
-        id: '', capacity: '', loc: '', truckType: 'Full Body',
+        id: '', capacity: '', capacityUnit: 'ton', loc: '', truckType: 'Full Body Truck',
         driverName: '', driverMobile: '', fitnessDoc: '', insuranceDoc: ''
       });
+      setTruckFormErrors({});
       fetchData();
     } catch (error) {
       console.error("Error adding truck:", error);
+      alert(error.response?.data?.message || 'Failed to add truck');
     } finally {
       setAddingTruck(false);
     }
@@ -201,13 +240,34 @@ export default function TruckOwnerDashboard() {
 
   const handleEditTruckSubmit = async (e) => {
     e.preventDefault();
+    const errors = {};
+    const plateVal = editTruckData.plateNumber || editTruckData.id;
+    const plateErr = validateLicensePlate(plateVal, isUrdu);
+    if (plateErr) errors.plateNumber = plateErr;
+
+    if (!editTruckData.loc) {
+      errors.loc = isUrdu ? 'مقام منتخب کریں' : 'Location is required';
+    }
+    const nameErr = validateRequired(editTruckData.driverName, 'Driver Name', isUrdu);
+    if (nameErr) errors.driverName = nameErr;
+
+    const phoneErr = validatePhone(editTruckData.driverMobile, isUrdu);
+    if (phoneErr) errors.driverMobile = phoneErr;
+
+    if (Object.keys(errors).length > 0) {
+      setEditTruckErrors(errors);
+      return;
+    }
+
     setAddingTruck(true);
     try {
       await logisticsAPI.updateTruck(editTruckData._id, editTruckData);
       setEditTruckData(null);
+      setEditTruckErrors({});
       fetchData();
     } catch (error) {
       console.error("Error updating truck:", error);
+      alert(error.response?.data?.message || 'Failed to update truck');
     } finally {
       setAddingTruck(false);
     }
@@ -421,7 +481,7 @@ export default function TruckOwnerDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative page-enter">
       {/* Truck Art Pattern Ribbon */}
       <TruckPatternBorder height="h-7" className="rounded-xl mb-4 shadow-sm" />
 
@@ -444,8 +504,8 @@ export default function TruckOwnerDashboard() {
           <p className="text-sm text-slate-600 mt-1 font-medium">{isUrdu ? 'ڈرائیورز، گاڑیوں، ڈسپیچ اور ٹرانسپورٹرز سے بات چیت کا مکمل نظام' : 'Manage driver profiles, vehicle certificates, dispatch operations, and transporters chats.'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex gap-2 bg-white border-2 border-amber-400 px-4 py-2 rounded-xl text-xs text-amber-900 font-mono shadow-sm">
-            <Clock size={14} className="text-red-600" />
+          <div className="flex gap-2 bg-white/90 backdrop-blur-md border-2 border-amber-400 px-4 py-2 rounded-xl text-xs text-amber-900 font-mono shadow-sm">
+            <Clock size={14} className="text-red-600 animate-pulse" />
             <span>Live Session: {new Date().toLocaleDateString()}</span>
           </div>
         </div>
@@ -456,7 +516,7 @@ export default function TruckOwnerDashboard() {
 
       {/* Verification Warnings */}
       {userData?.status === 'pending' && (
-        <div className="mb-8 border-l-4 border-amber-500 bg-white border-2 border-amber-300 rounded-3xl p-6 text-left shadow-md relative z-10">
+        <div className="mb-8 border-l-4 border-amber-500 glass-card border-2 border-amber-300 rounded-3xl p-6 text-left shadow-xl relative z-10">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-2">
             <AlertCircle className="text-amber-600" /> Identity Verification Required
           </h2>
@@ -482,7 +542,7 @@ export default function TruckOwnerDashboard() {
       )}
 
       {userData?.status === 'pending_verification' && (
-        <div className="mb-8 border-l-4 border-sky-500 bg-white border-2 border-sky-200 rounded-3xl p-6 text-left shadow-md relative z-10">
+        <div className="mb-8 border-l-4 border-sky-500 glass-card border-2 border-sky-200 rounded-3xl p-6 text-left shadow-xl relative z-10">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
             <CheckCircle className="text-sky-600" /> Documents Under Review
           </h2>
@@ -502,10 +562,10 @@ export default function TruckOwnerDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              className={`pb-3 text-sm font-semibold transition-all duration-300 relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id 
-                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:scale-[1.01]'
               }`}
             >
               {tab.name}
@@ -525,7 +585,7 @@ export default function TruckOwnerDashboard() {
         {/* FLEETS PANEL */}
         {activeTab === 'fleet' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white border-2 border-amber-200/90 rounded-3xl p-5 shadow-md">
+            <div className="flex justify-between items-center glass-card border border-white/60 rounded-3xl p-5 shadow-xl">
               <div className="flex items-center gap-3">
                 <TruckTaj className="text-amber-600 w-5 h-4" />
                 <span className="text-sm text-slate-800 font-bold font-mono">
@@ -534,14 +594,14 @@ export default function TruckOwnerDashboard() {
               </div>
               <button 
                 onClick={() => setShowAddModal(true)}
-                className="btn-primary text-xs !py-2 !px-4 shadow-md"
+                className="btn-primary text-xs !py-2 !px-4 shadow-md hover:scale-105 active:scale-95 transition-all"
               >
                 <Plus size={16} /> {isUrdu ? 'گاڑی شامل کریں' : 'Register Truck'}
               </button>
             </div>
 
             {/* Live Fleet Radar Map */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-5 shadow-md text-left">
+            <div className="glass-card border border-white/60 rounded-3xl p-5 shadow-xl text-left">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <TruckTaj className="text-amber-600 w-5 h-4" />
@@ -559,7 +619,7 @@ export default function TruckOwnerDashboard() {
             {/* Trucks list */}
             <div className="space-y-4">
               {trucks.map(truck => (
-                <div key={truck._id} className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 shadow-md hover:border-amber-400 hover:shadow-xl transition-all relative overflow-hidden group">
+                <div key={truck._id} className="glass-card-3d border border-white/60 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group">
                   <SindhiTruckTexture height="h-1.5" className="mb-4 rounded-full" />
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-4">
@@ -808,20 +868,30 @@ export default function TruckOwnerDashboard() {
                             </button>
                           </div>
                           
-                          <div className="flex gap-3">
+                          <div className="flex flex-wrap gap-2.5">
                             <button
                               onClick={() => {
                                 setSelectedConversation(selectedBooking);
                                 setActiveTab('messages');
                               }}
-                              className="flex-1 btn-outline text-slate-800 font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5"
+                              className="flex-1 btn-outline text-slate-800 font-bold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5"
                             >
                               <MessageSquare size={16} /> Radio Chat
                             </button>
+                            {selectedBooking.status !== 'Pending' && selectedBooking.status !== 'Rejected' && (
+                              <button
+                                type="button"
+                                onClick={() => setBiltyModalBooking(selectedBooking)}
+                                className="btn-outline text-amber-900 border-amber-400 bg-amber-50/80 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 hover:bg-amber-100 cursor-pointer shadow-xs"
+                              >
+                                <FileText size={15} className="text-amber-700" />
+                                <span>{isUrdu ? 'بلٹی دیکھیں' : 'View e-Bilty'}</span>
+                              </button>
+                            )}
                             {selectedBooking.status === 'Accepted' && (
                               <button 
                                 onClick={() => handleStartTransit(selectedBooking)}
-                                className="flex-1 btn-crimson text-white font-bold py-2.5 rounded-xl text-sm shadow-md"
+                                className="flex-1 btn-crimson text-white font-bold py-2.5 rounded-xl text-xs sm:text-sm shadow-md"
                               >
                                 {isUrdu ? 'روانہ کریں' : 'Start Transit'}
                               </button>
@@ -1045,8 +1115,8 @@ export default function TruckOwnerDashboard() {
 
       {/* Add Truck Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-          <div className="bg-white w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4">
+          <div className="bg-white/95 backdrop-blur-2xl w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-400/90 shadow-2xl overflow-hidden modal-enter">
             <ChamakRibbon height="h-[5px]" />
             <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
               <X size={20} />
@@ -1058,39 +1128,152 @@ export default function TruckOwnerDashboard() {
             <h2 className="text-2xl font-black text-slate-900 mb-6 text-left">{isUrdu ? 'نئی گاڑی رجسٹر کریں' : 'Register Vehicle'}</h2>
             <form onSubmit={handleAddTruckSubmit} className="space-y-4 text-left">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">License Plate / Registration No.</label>
-                <input required type="text" value={newTruck.id} onChange={e => setNewTruck({...newTruck, id: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" placeholder="e.g. LEA-4421" />
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  License Plate / Reg No. (e.g. LEA-4421) <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  value={newTruck.id} 
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase();
+                    setNewTruck({...newTruck, id: val});
+                    if (truckFormErrors.id) {
+                      setTruckFormErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.id;
+                        return copy;
+                      });
+                    }
+                  }} 
+                  className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                    truckFormErrors.id ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                  }`} 
+                  placeholder="e.g. LEA-4421 / TLA-891" 
+                />
+                {truckFormErrors.id && (
+                  <p className="text-[10px] text-red-600 mt-1 font-medium">{truckFormErrors.id}</p>
+                )}
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Payload Capacity</label>
-                  <input required type="text" value={newTruck.capacity} onChange={e => setNewTruck({...newTruck, capacity: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" placeholder="e.g. 25 tons" />
+                  <UnitInput
+                    label="Payload Capacity"
+                    value={newTruck.capacity}
+                    onChange={(val) => {
+                      setNewTruck({...newTruck, capacity: val});
+                      if (truckFormErrors.capacity) {
+                        setTruckFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.capacity;
+                          return copy;
+                        });
+                      }
+                    }}
+                    selectedUnit={newTruck.capacityUnit || 'ton'}
+                    onUnitChange={(unit) => setNewTruck({...newTruck, capacityUnit: unit})}
+                    units={WEIGHT_UNITS}
+                    placeholder="e.g. 25"
+                    required
+                    error={truckFormErrors.capacity}
+                    isUrdu={isUrdu}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Body Type</label>
-                  <select value={newTruck.truckType} onChange={e => setNewTruck({...newTruck, truckType: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500">
-                    <option value="Mini Truck">Mini Truck</option>
-                    <option value="Half Body">Half Body</option>
-                    <option value="Full Body">Full Body</option>
-                    <option value="22-Wheeler">22-Wheeler</option>
+                  <select 
+                    value={newTruck.truckType} 
+                    onChange={e => setNewTruck({...newTruck, truckType: e.target.value})} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-semibold"
+                  >
+                    {VEHICLE_TYPES.map(vt => (
+                      <option key={vt.id} value={vt.name}>
+                        {vt.name} ({vt.capacityTons}t max)
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Base / Depot Location</label>
-                <input required type="text" value={newTruck.loc} onChange={e => setNewTruck({...newTruck, loc: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="e.g. Lahore Depot" />
+                <SearchSelect 
+                  label="Base / Depot City"
+                  options={PAKISTAN_CITIES}
+                  value={newTruck.loc}
+                  onChange={(val) => {
+                    setNewTruck({...newTruck, loc: val});
+                    if (truckFormErrors.loc) {
+                      setTruckFormErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.loc;
+                        return copy;
+                      });
+                    }
+                  }}
+                  placeholder="Search hub or city..."
+                  error={truckFormErrors.loc}
+                  required
+                  isUrdu={isUrdu}
+                />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assigned Driver</label>
-                  <input required type="text" value={newTruck.driverName} onChange={e => setNewTruck({...newTruck, driverName: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="Nasir Hussain" />
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Assigned Driver <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={newTruck.driverName} 
+                    onChange={e => {
+                      setNewTruck({...newTruck, driverName: e.target.value});
+                      if (truckFormErrors.driverName) {
+                        setTruckFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.driverName;
+                          return copy;
+                        });
+                      }
+                    }} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                      truckFormErrors.driverName ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                    placeholder="Nasir Hussain" 
+                  />
+                  {truckFormErrors.driverName && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{truckFormErrors.driverName}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Driver Contact</label>
-                  <input required type="text" value={newTruck.driverMobile} onChange={e => setNewTruck({...newTruck, driverMobile: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" placeholder="0301-2345678" />
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Driver Contact (03XX-XXXXXXX) <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={newTruck.driverMobile} 
+                    onChange={e => {
+                      const val = formatPhone(e.target.value);
+                      setNewTruck({...newTruck, driverMobile: val});
+                      if (truckFormErrors.driverMobile) {
+                        setTruckFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.driverMobile;
+                          return copy;
+                        });
+                      }
+                    }} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                      truckFormErrors.driverMobile ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                    placeholder="0301-2345678" 
+                  />
+                  {truckFormErrors.driverMobile && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{truckFormErrors.driverMobile}</p>
+                  )}
                 </div>
               </div>
-              <button disabled={addingTruck} type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer mt-6 shadow-md">
+
+              <button disabled={addingTruck} type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer mt-6 shadow-md hover:scale-[1.01] active:scale-[0.99]">
                 {addingTruck ? (isUrdu ? 'گاڑی رجسٹر ہو رہی ہے...' : 'Registering...') : (isUrdu ? 'گاڑی محفوظ کریں' : 'Save & Enlist Vehicle')}
               </button>
             </form>
@@ -1100,8 +1283,8 @@ export default function TruckOwnerDashboard() {
 
       {/* Edit Truck Modal */}
       {editTruckData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-          <div className="bg-white w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4">
+          <div className="bg-white/95 backdrop-blur-2xl w-full max-w-md relative p-6 rounded-3xl border-2 border-amber-400/90 shadow-2xl overflow-hidden modal-enter">
             <ChamakRibbon height="h-[5px]" />
             <button onClick={() => setEditTruckData(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
               <X size={20} />
@@ -1109,36 +1292,88 @@ export default function TruckOwnerDashboard() {
             <h2 className="text-2xl font-black text-slate-900 mb-6 mt-2 text-left">{isUrdu ? 'گاڑی کی تفصیلات تبدیل کریں' : 'Edit Truck Details'}</h2>
             <form onSubmit={handleEditTruckSubmit} className="space-y-4 text-left">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">License Plate</label>
-                <input required type="text" value={editTruckData.plateNumber} onChange={e => setEditTruckData({...editTruckData, plateNumber: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" />
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  License Plate <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  value={editTruckData.plateNumber || editTruckData.id} 
+                  onChange={e => setEditTruckData({...editTruckData, plateNumber: e.target.value.toUpperCase()})} 
+                  className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                    editTruckErrors.plateNumber ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                  }`} 
+                />
+                {editTruckErrors.plateNumber && (
+                  <p className="text-[10px] text-red-600 mt-1 font-medium">{editTruckErrors.plateNumber}</p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Capacity</label>
-                  <input required type="text" value={editTruckData.capacity} onChange={e => setEditTruckData({...editTruckData, capacity: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" />
+                  <input 
+                    type="text" 
+                    value={editTruckData.capacity} 
+                    onChange={e => setEditTruckData({...editTruckData, capacity: e.target.value})} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Truck Type</label>
-                  <select value={editTruckData.truckType} onChange={e => setEditTruckData({...editTruckData, truckType: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500">
-                    <option value="Mini Truck">Mini Truck</option>
-                    <option value="Half Body">Half Body</option>
-                    <option value="Full Body">Full Body</option>
-                    <option value="22-Wheeler">22-Wheeler</option>
+                  <select 
+                    value={editTruckData.truckType} 
+                    onChange={e => setEditTruckData({...editTruckData, truckType: e.target.value})} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-semibold"
+                  >
+                    {VEHICLE_TYPES.map(vt => (
+                      <option key={vt.id} value={vt.name}>{vt.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Current Location</label>
-                <input required type="text" value={editTruckData.loc} onChange={e => setEditTruckData({...editTruckData, loc: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" />
+                <SearchSelect 
+                  label="Current Location"
+                  options={PAKISTAN_CITIES}
+                  value={editTruckData.loc}
+                  onChange={(val) => setEditTruckData({...editTruckData, loc: val})}
+                  placeholder="Select current city..."
+                  error={editTruckErrors.loc}
+                  required
+                  isUrdu={isUrdu}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Driver Name</label>
-                  <input required type="text" value={editTruckData.driverName} onChange={e => setEditTruckData({...editTruckData, driverName: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" />
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Driver Name <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={editTruckData.driverName} 
+                    onChange={e => setEditTruckData({...editTruckData, driverName: e.target.value})} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                      editTruckErrors.driverName ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                  />
+                  {editTruckErrors.driverName && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{editTruckErrors.driverName}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Driver Mobile</label>
-                  <input required type="text" value={editTruckData.driverMobile} onChange={e => setEditTruckData({...editTruckData, driverMobile: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" />
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Driver Mobile <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={editTruckData.driverMobile} 
+                    onChange={e => setEditTruckData({...editTruckData, driverMobile: formatPhone(e.target.value)})} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                      editTruckErrors.driverMobile ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                  />
+                  {editTruckErrors.driverMobile && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{editTruckErrors.driverMobile}</p>
+                  )}
                 </div>
               </div>
               <button disabled={addingTruck} type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer mt-6 shadow-md">
@@ -1151,8 +1386,8 @@ export default function TruckOwnerDashboard() {
 
       {/* Update Documents Modal */}
       {showDocsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-          <div className="bg-white w-full max-w-sm relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4">
+          <div className="bg-white/95 backdrop-blur-2xl w-full max-w-sm relative p-6 rounded-3xl border-2 border-amber-400/90 shadow-2xl overflow-hidden modal-enter">
             <ChamakRibbon height="h-[5px]" />
             <button onClick={() => setShowDocsModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
               <X size={20} />
@@ -1192,7 +1427,7 @@ export default function TruckOwnerDashboard() {
                 />
               </div>
               <p className="text-[10px] text-slate-500 font-medium">Accepted: Images (JPG, PNG) or PDF. Max 10MB.</p>
-              <button type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer mt-6 shadow-md">
+              <button type="submit" className="w-full btn-primary text-white font-extrabold py-3 rounded-xl text-sm transition-all cursor-pointer mt-6 shadow-md hover:scale-[1.01] active:scale-[0.99]">
                 {isUrdu ? 'دستاویزات اپلوڈ کریں' : 'Upload & Save Documents'}
               </button>
             </form>
@@ -1216,8 +1451,8 @@ export default function TruckOwnerDashboard() {
           : `e.g. Goods received by customer, verified via OTP signature code 8821`;
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
-            <div className="bg-white w-full max-w-xl max-h-[90vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4">
+            <div className="bg-white/95 backdrop-blur-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-400/90 shadow-2xl modal-enter">
               <ChamakRibbon height="h-[5px]" />
               <button onClick={() => setCompletingBooking(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X size={20} />
@@ -1375,6 +1610,12 @@ export default function TruckOwnerDashboard() {
           </div>
         );
       })()}
+
+      {/* Official Bilty Preview & Print Modal */}
+      <BiltyModal 
+        booking={biltyModalBooking} 
+        onClose={() => setBiltyModalBooking(null)} 
+      />
 
     </div>
   );

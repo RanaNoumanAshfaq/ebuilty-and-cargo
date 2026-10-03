@@ -12,12 +12,17 @@ import BiltyModal from '../../components/BiltyModal';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer from '../../components/MapViewer';
 import { calculateFreightTariff, VEHICLE_MULTIPLIERS, getIntercityDistance } from '../../utils/fareCalculator';
-
-const PAKISTAN_CITIES = [
-  'Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Islamabad',
-  'Multan', 'Sukkur', 'Peshawar', 'Quetta', 'Gujranwala',
-  'Sialkot', 'Hyderabad', 'Gwadar', 'Hub'
-];
+import SearchSelect from '../../components/SearchSelect';
+import UnitInput from '../../components/UnitInput';
+import FormField from '../../components/FormField';
+import { 
+  PAKISTAN_CITIES, 
+  VEHICLE_TYPES, 
+  WEIGHT_UNITS, 
+  RATE_TYPES,
+  convertToTons 
+} from '../../data/logisticsData';
+import { validatePositiveNumber } from '../../utils/validation';
 
 const safeJsonParse = (val, fallback) => {
   if (!val) return fallback;
@@ -54,12 +59,15 @@ export default function TransporterDashboard() {
   const [assignOrigin, setAssignOrigin] = useState('Lahore');
   const [assignDestination, setAssignDestination] = useState('Karachi');
   const [assignWeight, setAssignWeight] = useState('15');
+  const [assignWeightUnit, setAssignWeightUnit] = useState('ton');
   const [assignVehicleType, setAssignVehicleType] = useState('Full Body Truck');
+  const [assignFormErrors, setAssignFormErrors] = useState({});
 
   // Quick Tariff Estimator
   const [quickCalcOrigin, setQuickCalcOrigin] = useState('Lahore');
   const [quickCalcDest, setQuickCalcDest] = useState('Karachi');
   const [quickCalcWeight, setQuickCalcWeight] = useState('15');
+  const [quickCalcWeightUnit, setQuickCalcWeightUnit] = useState('ton');
 
   // Active Shipments state
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -189,7 +197,18 @@ export default function TransporterDashboard() {
 
   const handleAssignConfirm = async (e) => {
     e.preventDefault();
-    if (!selectedCargoForAssign || !assignPrice) return;
+    const errors = {};
+    if (!selectedCargoForAssign) {
+      errors.cargo = isUrdu ? 'برائے مہربانی پہلے مال کا انتخاب کریں' : 'Please select an accepted cargo consignment';
+    }
+    const priceErr = validatePositiveNumber(assignPrice, 'Agreed Price', isUrdu);
+    if (priceErr) errors.price = priceErr;
+
+    if (Object.keys(errors).length > 0) {
+      setAssignFormErrors(errors);
+      return;
+    }
+
     try {
       const truckId = selectedTruckForAssign._id || selectedTruckForAssign.id;
       const cargoId = selectedCargoForAssign._id || selectedCargoForAssign.id;
@@ -210,6 +229,7 @@ export default function TransporterDashboard() {
       });
       setShowAssignModal(false);
       setAssignPrice('');
+      setAssignFormErrors({});
       setSelectedCargoForAssign(null);
       setSelectedTruckForAssign(null);
       fetchData();
@@ -270,7 +290,7 @@ export default function TransporterDashboard() {
   const pendingRequests = cargoRequests.filter(c => c.status === 'Pending');
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative page-enter">
       {/* Truck Art Pattern Ribbon */}
       <TruckPatternBorder height="h-7" className="rounded-xl mb-4 shadow-sm" />
 
@@ -293,8 +313,8 @@ export default function TransporterDashboard() {
           <p className="text-sm text-slate-600 mt-1 font-medium">{isUrdu ? 'کارپوریٹ شپنگ کی درخواستیں قبول کریں اور گاڑی ڈسپیچ کریں' : 'Accept corporate shipping requests, coordinate fleet logistics, and dispatch verified drivers.'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex gap-2 bg-white border-2 border-cyan-400 px-4 py-2 rounded-xl text-xs text-cyan-950 font-mono shadow-sm">
-            <Clock size={14} className="text-purple-600" />
+          <div className="flex gap-2 bg-white/90 backdrop-blur-md border-2 border-cyan-400 px-4 py-2 rounded-xl text-xs text-cyan-950 font-mono shadow-sm">
+            <Clock size={14} className="text-purple-600 animate-pulse" />
             <span>Operations Live: {new Date().toLocaleDateString()}</span>
           </div>
         </div>
@@ -318,10 +338,10 @@ export default function TransporterDashboard() {
                 setActiveTab(tab.id);
                 setSelectedBooking(null);
               }}
-              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              className={`pb-3 text-sm font-semibold transition-all duration-300 relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id 
-                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:scale-[1.01]'
               }`}
             >
               {tab.name}
@@ -347,7 +367,7 @@ export default function TransporterDashboard() {
               const reqRecipients = Array.isArray(req.recipients) ? req.recipients : safeJsonParse(req.recipients, []);
 
               return (
-              <div key={req._id || req.id} className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
+              <div key={req._id || req.id} className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-4 transition-all duration-300 hover:shadow-2xl">
                 <div className="flex justify-between items-center border-b border-amber-200 pb-3">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -523,7 +543,7 @@ export default function TransporterDashboard() {
             </div>
 
             {/* Quick Inter-City Freight Tariff Estimator Bar */}
-            <div className="bg-gradient-to-r from-amber-50 via-white to-amber-50 border-2 border-amber-300 rounded-3xl p-4 shadow-sm text-left">
+            <div className="glass-card border-2 border-amber-300/80 rounded-3xl p-4 shadow-lg text-left">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <TruckTaj className="text-amber-600 w-4 h-3" />
@@ -531,53 +551,55 @@ export default function TransporterDashboard() {
                     ⚡ Live Inter-City Freight Tariff Estimator
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-amber-900 font-bold bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300">
+                <span className="text-[10px] font-mono text-amber-900 font-bold bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300 shadow-2xs">
                   Standard Rate: Rs. 45/Ton-km + 8% Fuel + 16% Tax
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">From (Origin)</label>
-                  <select
+                  <SearchSelect
+                    label="From (Origin)"
+                    options={PAKISTAN_CITIES}
                     value={quickCalcOrigin}
-                    onChange={e => setQuickCalcOrigin(e.target.value)}
-                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium outline-none focus:border-red-600 cursor-pointer"
-                  >
-                    {PAKISTAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                    onChange={(val) => setQuickCalcOrigin(val)}
+                    placeholder="Origin city..."
+                    isUrdu={isUrdu}
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">To (Destination)</label>
-                  <select
+                  <SearchSelect
+                    label="To (Destination)"
+                    options={PAKISTAN_CITIES}
                     value={quickCalcDest}
-                    onChange={e => setQuickCalcDest(e.target.value)}
-                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-medium outline-none focus:border-red-600 cursor-pointer"
-                  >
-                    {PAKISTAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                    onChange={(val) => setQuickCalcDest(val)}
+                    placeholder="Destination city..."
+                    isUrdu={isUrdu}
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Payload (Tons)</label>
-                  <input
-                    type="number"
-                    min="0.5"
-                    step="0.5"
+                  <UnitInput
+                    label="Payload"
                     value={quickCalcWeight}
-                    onChange={e => setQuickCalcWeight(e.target.value)}
-                    className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono outline-none focus:border-red-600"
+                    onChange={(val) => setQuickCalcWeight(val)}
+                    selectedUnit={quickCalcWeightUnit}
+                    onUnitChange={(unit) => setQuickCalcWeightUnit(unit)}
+                    units={WEIGHT_UNITS}
+                    placeholder="e.g. 15"
+                    isUrdu={isUrdu}
                   />
                 </div>
                 {(() => {
+                  const wtInTons = convertToTons(quickCalcWeight, quickCalcWeightUnit);
                   const quickTariff = calculateFreightTariff({
                     origin: quickCalcOrigin,
                     destination: quickCalcDest,
-                    chargeableTons: parseFloat(quickCalcWeight) || 10,
+                    chargeableTons: wtInTons > 0 ? wtInTons : 10,
                     vehicleType: 'Full Body Truck'
                   });
                   const quickTotal = quickTariff.totalFare || quickTariff.totalFreight || 0;
                   return (
-                    <div className="bg-white border-2 border-red-500 rounded-xl p-2 px-3 flex items-center justify-between shadow-xs">
+                    <div className="bg-white/90 border-2 border-red-500 rounded-xl p-2 px-3 flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[9px] font-bold text-slate-500 uppercase block font-mono">{quickTariff.distanceKm || 0} km</span>
                         <span className="text-sm font-black text-red-700 font-mono">Rs. {quickTotal.toLocaleString()}</span>
@@ -594,7 +616,7 @@ export default function TransporterDashboard() {
             {trucksViewMode === 'radar' ? (
               /* Live Fleet Radar Map View */
               <div className="space-y-4">
-                <div className="bg-slate-950 border-2 border-amber-300 rounded-3xl p-4 shadow-xl overflow-hidden relative">
+                <div className="bg-slate-950/95 backdrop-blur-xl border-2 border-amber-400/80 rounded-3xl p-4 shadow-2xl overflow-hidden relative glass-card-3d">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3 px-2">
                     <div className="flex items-center gap-2">
                       <Radio size={16} className="text-cyan-400 animate-pulse" />
@@ -621,7 +643,7 @@ export default function TransporterDashboard() {
                     <div 
                       key={truck._id || truck.id}
                       onClick={() => openAssignModalForTruck(truck)}
-                      className="bg-white border border-amber-200 rounded-xl p-3 text-left hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md flex items-center justify-between group"
+                      className="glass-card-3d border border-amber-200/80 rounded-xl p-3 text-left hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md flex items-center justify-between group"
                     >
                       <div>
                         <p className="font-mono font-bold text-xs text-slate-900 group-hover:text-red-700 transition-colors">{truck.plateNumber}</p>
@@ -643,13 +665,13 @@ export default function TransporterDashboard() {
               /* Grid Cards View */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {availableTrucks.map(truck => (
-                  <div key={truck._id} className="bg-white border-2 border-amber-200/90 rounded-3xl p-5 text-left flex flex-col justify-between h-[290px] shadow-md hover:border-amber-400 hover:shadow-lg transition-all relative overflow-hidden group">
+                  <div key={truck._id} className="glass-card-3d border border-white/60 rounded-3xl p-5 text-left flex flex-col justify-between h-[290px] shadow-lg hover:border-amber-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group">
                     <div>
                       <div className="flex justify-between items-start">
-                        <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs">
                           <Truck size={20} />
                         </div>
-                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-black tracking-wider uppercase px-2.5 py-0.5 rounded-md font-mono">
+                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-black tracking-wider uppercase px-2.5 py-0.5 rounded-md font-mono shadow-2xs">
                           Available
                         </span>
                       </div>
@@ -944,8 +966,8 @@ export default function TransporterDashboard() {
 
       {/* Rejection popup form */}
       {rejectingCargoId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
-          <div className="bg-white w-full max-w-md relative p-6 rounded-3xl border-2 border-red-300 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
+          <div className="bg-white/95 backdrop-blur-2xl w-full max-w-md relative p-6 rounded-3xl border-2 border-red-400/90 shadow-2xl overflow-hidden modal-enter">
             <ChamakRibbon height="h-[5px]" />
             <button onClick={() => { setRejectingCargoId(null); setRejectionReason(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
               <X size={20} />
@@ -959,11 +981,11 @@ export default function TransporterDashboard() {
                   required 
                   value={rejectionReason} 
                   onChange={e => setRejectionReason(e.target.value)} 
-                  className="w-full bg-[#FAF7EE] border border-slate-300 rounded-2xl px-3.5 py-2.5 text-slate-900 h-24 text-sm outline-none focus:bg-white focus:border-red-500" 
+                  className="w-full bg-[#FAF7EE]/90 border border-slate-300 rounded-2xl px-3.5 py-2.5 text-slate-900 h-24 text-sm outline-none focus:bg-white focus:border-red-500" 
                   placeholder="e.g. Schedule conflict or route unavailable. We cannot dispatch vehicles to this route next week." 
                 />
               </div>
-              <button type="submit" className="w-full btn-crimson text-white font-bold py-3 rounded-xl text-sm transition-colors cursor-pointer shadow-md">
+              <button type="submit" className="w-full btn-crimson text-white font-bold py-3 rounded-xl text-sm transition-all cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]">
                 {isUrdu ? 'مسترد کریں' : 'Confirm Rejection'}
               </button>
             </form>
@@ -982,8 +1004,8 @@ export default function TransporterDashboard() {
         });
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
-            <div className="bg-white w-full max-w-lg max-h-[92vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-300 shadow-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
+            <div className="bg-white/95 backdrop-blur-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto relative p-6 rounded-3xl border-2 border-amber-400/90 shadow-2xl modal-enter">
               <ChamakRibbon height="h-[5px]" />
               <button onClick={() => setShowAssignModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X size={20} />
@@ -1020,14 +1042,25 @@ export default function TransporterDashboard() {
               <form onSubmit={handleAssignConfirm} className="space-y-4 text-left">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Select Accepted Consignment Request (Optional)
+                    Select Accepted Consignment Request <span className="text-red-500">*</span>
                   </label>
                   <select 
                     value={selectedCargoForAssign ? String(selectedCargoForAssign._id) : ''}
-                    onChange={e => handleCargoSelectInModal(e.target.value)}
-                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-medium cursor-pointer"
+                    onChange={e => {
+                      handleCargoSelectInModal(e.target.value);
+                      if (assignFormErrors.cargo) {
+                        setAssignFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.cargo;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3.5 py-2.5 text-slate-900 text-xs outline-none transition-colors font-medium cursor-pointer ${
+                      assignFormErrors.cargo ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`}
                   >
-                    <option value="">-- Custom Route / Manual Consignment --</option>
+                    <option value="">-- Select Consignment Request --</option>
                     {cargoRequests
                       .filter(c => c.status === 'Accepted')
                       .map(c => (
@@ -1036,73 +1069,65 @@ export default function TransporterDashboard() {
                         </option>
                       ))}
                   </select>
+                  {assignFormErrors.cargo && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{assignFormErrors.cargo}</p>
+                  )}
                 </div>
 
                 {/* Route Details: From, To, Weight, Vehicle Type */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      From (Origin City) *
-                    </label>
-                    <select
+                    <SearchSelect
+                      label="From (Origin City)"
+                      options={PAKISTAN_CITIES}
                       value={assignOrigin}
-                      onChange={e => setAssignOrigin(e.target.value)}
-                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
-                    >
-                      {PAKISTAN_CITIES.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setAssignOrigin(val)}
+                      placeholder="Origin city..."
+                      required
+                      isUrdu={isUrdu}
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      To (Destination City) *
-                    </label>
-                    <select
+                    <SearchSelect
+                      label="To (Destination City)"
+                      options={PAKISTAN_CITIES}
                       value={assignDestination}
-                      onChange={e => setAssignDestination(e.target.value)}
-                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
-                    >
-                      {PAKISTAN_CITIES.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setAssignDestination(val)}
+                      placeholder="Destination city..."
+                      required
+                      isUrdu={isUrdu}
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Consignment Weight (Tons) *
-                    </label>
-                    <input 
-                      type="number"
-                      step="0.5"
-                      min="0.5"
+                    <UnitInput
+                      label="Consignment Weight"
                       value={assignWeight}
-                      onChange={e => setAssignWeight(e.target.value)}
+                      onChange={(val) => setAssignWeight(val)}
+                      selectedUnit={assignWeightUnit}
+                      onUnitChange={(unit) => setAssignWeightUnit(unit)}
+                      units={WEIGHT_UNITS}
                       placeholder="e.g. 15"
-                      className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono"
+                      required
+                      isUrdu={isUrdu}
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Vehicle Multiplier Class
+                      Vehicle Type
                     </label>
                     <select
                       value={assignVehicleType}
                       onChange={e => setAssignVehicleType(e.target.value)}
                       className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 cursor-pointer font-medium"
                     >
-                      <option value="Mini Truck">Mini Truck (0.85x)</option>
-                      <option value="Half Body Truck">Half Body Truck (1.00x)</option>
-                      <option value="Full Body Truck">Full Body Truck (1.15x)</option>
-                      <option value="Container (20ft)">Container 20ft (1.10x)</option>
-                      <option value="Container (40ft)">Container 40ft (1.20x)</option>
-                      <option value="18-Wheeler Trailer">18-Wheeler Trailer (1.25x)</option>
-                      <option value="22-Wheeler">22-Wheeler (1.30x)</option>
+                      {VEHICLE_TYPES.map(vt => (
+                        <option key={vt.id} value={vt.name}>{vt.name} ({vt.capacityTons}t max)</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1149,7 +1174,16 @@ export default function TransporterDashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setAssignPrice(activeTariff.totalFare || activeTariff.totalFreight)}
+                      onClick={() => {
+                        setAssignPrice(activeTariff.totalFare || activeTariff.totalFreight);
+                        if (assignFormErrors.price) {
+                          setAssignFormErrors(prev => {
+                            const copy = { ...prev };
+                            delete copy.price;
+                            return copy;
+                          });
+                        }
+                      }}
                       className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
                     >
                       ⚡ Apply Fare
@@ -1160,25 +1194,38 @@ export default function TransporterDashboard() {
                 {/* Agreed Price input */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Agreed / Contract Price (PKR) *
+                    Agreed / Contract Price (PKR) <span className="text-red-500">*</span>
                   </label>
                   <input 
-                    required
                     type="number"
                     value={assignPrice}
-                    onChange={e => setAssignPrice(e.target.value)}
+                    onChange={e => {
+                      setAssignPrice(e.target.value);
+                      if (assignFormErrors.price) {
+                        setAssignFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.price;
+                          return copy;
+                        });
+                      }
+                    }}
                     placeholder="e.g. 75000"
-                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 text-sm font-bold outline-none focus:bg-white focus:border-amber-500 font-mono"
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3.5 py-2.5 text-slate-900 text-sm font-bold outline-none font-mono transition-colors ${
+                      assignFormErrors.price ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`}
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Tip: Click "⚡ Apply Fare" above to auto-fill with the government/NHA tariff estimate, or adjust manually.
-                  </p>
+                  {assignFormErrors.price ? (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{assignFormErrors.price}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Tip: Click "⚡ Apply Fare" above to auto-fill with the government/NHA tariff estimate, or adjust manually.
+                    </p>
+                  )}
                 </div>
 
                 <button 
                   type="submit" 
-                  disabled={!assignPrice}
-                  className="w-full btn-primary disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all cursor-pointer mt-4 shadow-md"
+                  className="w-full btn-primary text-white font-bold py-3 rounded-xl text-sm transition-all cursor-pointer mt-4 shadow-md"
                 >
                   {isUrdu ? 'گاڑی مقرر کریں' : 'Confirm Dispatch & Assignment'}
                 </button>

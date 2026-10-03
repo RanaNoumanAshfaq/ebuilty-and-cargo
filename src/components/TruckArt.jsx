@@ -39,9 +39,9 @@ export const TruckMorBadge = ({ text, subtext, className = '' }) => {
   const { isUrdu, t } = useLanguage();
   const label = isUrdu ? (text || t('badgePeacock')) : (subtext || t('badgePeacock'));
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border-2 border-cyan-400 bg-gradient-to-r from-sky-50 via-purple-50 to-emerald-50 text-slate-800 text-xs shadow-sm ${className}`}>
+    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-400/90 bg-gradient-to-r from-sky-50/90 via-purple-50/80 to-emerald-50/90 backdrop-blur-md text-slate-800 text-xs shadow-[0_2px_12px_rgba(2,132,199,0.18)] hover:shadow-[0_4px_16px_rgba(2,132,199,0.3)] transition-all animate-float-slow select-none ${className}`}>
       <span className="text-base select-none">🦚</span>
-      <span className={isUrdu ? "font-urdu font-black text-xs text-purple-900" : "font-sans font-bold text-xs text-purple-900"}>
+      <span className={isUrdu ? "font-urdu font-black text-xs text-purple-900" : "font-sans font-extrabold text-xs text-purple-950 tracking-tight"}>
         {label}
       </span>
     </div>
@@ -56,7 +56,7 @@ export const NazarBattuBadge = ({ text, className = '' }) => {
   const { isUrdu, t } = useLanguage();
   const label = isUrdu ? (text || t('badgeNazar')) : t('badgeNazar');
   return (
-    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-purple-400 bg-purple-50 text-purple-950 text-xs font-bold shadow-xs ${className}`}>
+    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-purple-400/80 bg-purple-50/90 backdrop-blur-md text-purple-950 text-xs font-bold shadow-[0_2px_10px_rgba(124,58,237,0.15)] hover:shadow-[0_4px_14px_rgba(124,58,237,0.25)] transition-all animate-float-reverse select-none ${className}`}>
       <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 border border-white shadow-xs"></span>
       <span className={isUrdu ? "font-urdu text-sm font-black text-purple-900" : "font-sans text-xs font-bold text-purple-900"}>
         {label}
@@ -209,10 +209,10 @@ export const AjrakBackground = TruckBackground;
  */
 export const TruckPhotoShowcase = ({ 
   image = '/images/peacock_truck_art_bg.jpg',
-  caption = 'مور و شاہین • چشمِ بد دور',
-  subcaption = 'Pakistani Bedford Truck & Truck Art Peacock • Khyber & Sindh Fleet',
-  tag = 'ماشاءاللہ',
-  tagEn = 'By God\'s Grace',
+  caption = 'ای کارگو بلٹی • محفوظ اور بااعتماد ترسیل',
+  subcaption = 'Commercial Fleet • Verified Freight Transit Across Pakistan',
+  tag = 'محفوظ ترسیل',
+  tagEn = 'Safe Transit',
   className = ''
 }) => {
   const { isUrdu } = useLanguage();
@@ -349,7 +349,7 @@ export const UrduMotto = ({ text, translation, className = '' }) => {
   const label = isUrdu ? (text || t('mottoLookLove')) : (translation || t('mottoLookLove'));
   return (
     <div 
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-300 bg-gradient-to-r from-amber-50 via-red-50 to-amber-50 text-amber-950 text-xs shadow-xs ${className}`}
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-300/90 bg-gradient-to-r from-amber-50/90 via-red-50/80 to-amber-50/90 backdrop-blur-md text-amber-950 text-xs shadow-[0_2px_10px_rgba(245,158,11,0.15)] hover:shadow-[0_4px_14px_rgba(245,158,11,0.25)] transition-all animate-float-pulse select-none ${className}`}
       title={label}
     >
       <TruckTaj size={15} />
@@ -373,21 +373,21 @@ export const TruckPoetryBanner = ({
   const mainText = isUrdu ? (text || t('poetryBanner')) : (subtext || t('poetryBanner'));
   const secondaryText = isUrdu ? t('poetrySubtext') : t('poetrySubtext');
   return (
-    <div className={`relative px-4 py-2.5 rounded-2xl border-2 border-pink-500 bg-gradient-to-r from-yellow-100 via-pink-50 to-amber-100 text-center shadow-md overflow-hidden ${className}`}>
-      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-pink-500 via-yellow-400 via-red-600 to-cyan-500" />
+    <div className={`relative px-4 py-2.5 rounded-2xl border-2 border-cyan-400 bg-gradient-to-r from-sky-50/95 via-purple-50/90 to-amber-50/95 backdrop-blur-xl text-center shadow-[0_10px_30px_rgba(2,132,199,0.16)] overflow-hidden transition-all duration-300 hover:shadow-[0_14px_38px_rgba(2,132,199,0.25)] ${className}`}>
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-yellow-400 via-cyan-500 to-purple-600" />
       <div className="flex items-center justify-center gap-3">
         <FloralRosette size={18} />
-        <span className={isUrdu ? "font-urdu text-lg font-black text-red-900 drop-shadow-xs" : "font-sans text-sm font-black text-red-900 drop-shadow-xs"}>
+        <span className={isUrdu ? "font-urdu text-lg font-black text-cyan-950 drop-shadow-xs" : "font-sans text-sm font-black text-cyan-950 drop-shadow-xs"}>
           {mainText}
         </span>
         <FloralRosette size={18} />
       </div>
       {secondaryText && (
-        <p className={`text-[10px] tracking-wider text-pink-950 font-bold mt-0.5 ${isUrdu ? 'font-urdu' : 'font-mono uppercase'}`}>
+        <p className={`text-[10px] tracking-wider text-purple-950 font-bold mt-0.5 ${isUrdu ? 'font-urdu' : 'font-mono uppercase'}`}>
           {secondaryText}
         </p>
       )}
-      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r from-cyan-500 via-red-600 via-yellow-400 to-pink-500" />
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 via-cyan-500 via-yellow-400 to-pink-500" />
     </div>
   );
 };

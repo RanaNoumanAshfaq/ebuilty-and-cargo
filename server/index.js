@@ -52,11 +52,15 @@ app.post('/api/auth/register', async (req, res) => {
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) return res.status(400).json({ message: 'User already exists' });
 
-    const status = role === 'admin' ? 'active' : 'pending';
-    const user = await User.create({ name, email, password, role, status, cnic, phone, businessName, businessRegNumber });
+    let safeRole = (role || 'business').toLowerCase().trim();
+    if (safeRole === 'fleet-owner' || safeRole === 'fleet_owner' || safeRole === 'driver') safeRole = 'truck_owner';
+    if (safeRole === 'shipper') safeRole = 'business';
+
+    const status = safeRole === 'admin' ? 'active' : 'pending';
+    const user = await User.create({ name, email, password, role: safeRole, status, cnic, phone, businessName, businessRegNumber });
 
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, user: { id: user.id, name, email, role, status, cnic, phone, businessName, businessRegNumber } });
+    res.status(201).json({ token, user: { id: user.id, name, email, role: user.role, status, cnic, phone, businessName, businessRegNumber } });
   } catch (error) {
     console.error('Registration Error:', error);
     res.status(500).json({ message: error.message });

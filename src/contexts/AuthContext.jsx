@@ -12,8 +12,12 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function signup(email, password, role, name, cnic, phone, businessName, businessRegNumber) {
-    const { data } = await authAPI.register({ email, password, role, name, cnic, phone, businessName, businessRegNumber });
+  async function signup(emailOrData, password, role, name, cnic, phone, businessName, businessRegNumber) {
+    const payload = typeof emailOrData === 'object' && emailOrData !== null
+      ? emailOrData
+      : { email: emailOrData, password, role, name, cnic, phone, businessName, businessRegNumber };
+
+    const { data } = await authAPI.register(payload);
     localStorage.setItem('token', data.token);
     setCurrentUser(data.user);
     setUserData(data.user);
@@ -54,7 +58,7 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, []);
 
-  const value = { currentUser, userData, login, signup, logout };
+  const value = { currentUser, userData, login, signup, register: signup, logout };
 
   return (
     <AuthContext.Provider value={value}>

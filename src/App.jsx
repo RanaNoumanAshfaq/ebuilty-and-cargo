@@ -56,7 +56,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white border-b border-cyan-200 shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur-xl border-b border-cyan-200/80 shadow-xs transition-colors">
       {/* Top Authentic Pakistani Truck Art Pattern Border */}
       <TruckPatternBorder height="h-2.5 sm:h-3" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -67,19 +67,19 @@ const Navbar = () => {
             onClick={() => {
               if (currentUser && userData?.role) {
                 const target = 
-                  userData.role === 'admin' ? '/admin' :
-                  userData.role === 'truck_owner' ? '/truck-owner' :
-                  userData.role === 'transporter' ? '/transporter' :
-                  userData.role === 'business' ? '/business' : '/';
+                  userData.role === 'admin' ? '/admin/dashboard' :
+                  (userData.role === 'truck_owner' || userData.role === 'fleet_owner' || userData.role === 'driver') ? '/fleet-owner/dashboard' :
+                  userData.role === 'transporter' ? '/transporter/dashboard' :
+                  '/shipper/dashboard';
                 navigate(target);
               } else {
                 navigate('/');
               }
             }}
           >
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-md">
-              <div className="w-full h-full bg-[#FFFDF7] rounded-[10px] flex items-center justify-center">
-                <TruckTaj size={24} />
+            <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-md group-hover:scale-105 transition-transform shrink-0">
+              <div className="w-full h-full bg-[#FFFDF7] rounded-[10px] flex items-center justify-center overflow-hidden">
+                <img src="/logo.jpg" alt="E-CARGO-BILTY" className="w-full h-full object-cover" />
               </div>
             </div>
             <div className="flex flex-col text-left">
@@ -126,7 +126,7 @@ const Navbar = () => {
                   </button>
                   
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-84 bg-white border border-cyan-200 shadow-xl rounded-2xl z-[60] max-h-[420px] overflow-y-auto p-4">
+                    <div className="absolute right-0 mt-2 w-84 bg-white/90 backdrop-blur-2xl border border-cyan-200/90 shadow-[0_20px_50px_rgba(2,132,199,0.25)] rounded-2xl z-[60] max-h-[420px] overflow-y-auto p-4 modal-enter">
                       <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2">
                           <TruckTaj size={18} />
@@ -138,7 +138,7 @@ const Navbar = () => {
                       ) : (
                         <div className="space-y-2">
                           {notifications.map(n => (
-                            <div key={n._id} className="p-3 rounded-xl bg-sky-50/60 border border-cyan-200/80 hover:border-purple-400 flex justify-between items-start gap-2 transition-all">
+                            <div key={n._id} className="p-3 rounded-xl bg-white/70 backdrop-blur-md border border-cyan-200/80 hover:border-purple-400 hover:shadow-xs flex justify-between items-start gap-2 transition-all">
                               <div>
                                 <p className="text-xs text-slate-800 font-medium leading-relaxed">{n.message}</p>
                                 <p className="text-[10px] font-mono text-cyan-700 mt-1 flex items-center gap-1 font-semibold">
@@ -146,7 +146,7 @@ const Navbar = () => {
                                   {new Date(n.createdAt).toLocaleTimeString()}
                                 </p>
                               </div>
-                              <button onClick={() => clearNotification(n._id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1">
+                              <button onClick={() => clearNotification(n._id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1 cursor-pointer">
                                 <X size={13} />
                               </button>
                             </div>
@@ -213,10 +213,10 @@ const Home = () => {
   }, [currentUser, userData, navigate]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-12 relative overflow-hidden bg-[#F0F9FF]">
+    <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-12 relative overflow-hidden bg-[#F0F9FF] page-enter">
       <div className="text-center max-w-4xl relative z-10">
-        {/* Top Tag - Single Language */}
-        <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full border-2 border-cyan-400 bg-white shadow-md mb-6">
+        {/* Top Tag - Single Language with Antigravity Floating */}
+        <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full border border-cyan-400/90 bg-white/80 backdrop-blur-md shadow-md mb-6 animate-float-slow select-none">
           <span className="text-xl">🦚</span>
           <span className={`text-xs tracking-widest uppercase font-extrabold ${isUrdu ? 'font-urdu text-sm text-purple-900' : 'font-mono text-cyan-800'}`}>
             {t('homeTag')}
@@ -235,25 +235,25 @@ const Home = () => {
         </p>
 
         {/* Truck Art Poetry Banner */}
-        <div className="max-w-md mx-auto mb-4">
+        <div className="max-w-md mx-auto mb-4 animate-float-slow">
           <TruckPoetryBanner />
           <TruckGhungrooTrim className="opacity-95" />
         </div>
 
-        {/* Authentic Decorated Trucks Showcase - Shows single language based on active selection */}
+        {/* Authentic Decorated Trucks Showcase */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto my-8 text-left">
           <TruckPhotoShowcase 
             image="/images/peacock_truck_art_bg.jpg"
-            caption="شاہینِ روڈ • گرین بیڈفورڈ"
-            subcaption="Pakistani Bedford Truck • Ornate Bonnet & Crown Taj"
-            tag="ماشاءاللہ"
-            tagEn="By God's Grace"
+            caption="قومی شاہراہ نیٹ ورک • ہیوی کیریئر فلیٹ"
+            subcaption="National Commercial Carrier • Verified Logistics Fleet"
+            tag="معیاری خدمات"
+            tagEn="Quality Logistics"
           />
           <TruckPhotoShowcase 
             image="/images/peacock_truck_art_bg.jpg"
-            caption="مورِ پاکستان • چشمِ بد دور"
-            subcaption="Pakistani Truck Art Peacock • Feathers of Good Fortune"
-            tag="سفرِ خیر"
+            caption="ای کارگو باربرداری • محفوظ اور بروقت ترسیل"
+            subcaption="E-Cargo Bilty Network • Verified Nationwide Dispatch"
+            tag="محفوظ ترسیل"
             tagEn="Safe Transit"
           />
         </div>
@@ -263,23 +263,23 @@ const Home = () => {
           <TruckPatternBorder height="h-7 sm:h-9" />
         </div>
         
-        {/* 4 Role Portal Cards */}
+        {/* 4 Role Portal Cards with 3D Glassmorphism & Hover Elevation */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto text-left">
           {/* Admin Card */}
-          <Link to="/admin" className="glass-card bg-white border-2 border-purple-300 hover:border-purple-600 hover:-translate-y-1.5 group relative overflow-hidden shadow-sm hover:shadow-2xl transition-all">
-            <div className="absolute top-0 left-0 bottom-0 w-2.5 bg-gradient-to-b from-purple-600 via-indigo-600 to-cyan-400"></div>
+          <Link to="/admin" className="glass-card-3d border-2 border-purple-300/80 hover:border-purple-500 group relative overflow-hidden transition-all">
+            <div className="absolute top-0 left-0 bottom-0 w-2 bg-gradient-to-b from-purple-600 via-indigo-600 to-cyan-400"></div>
             <div className="flex items-start justify-between mb-3 pl-2">
-              <div className="w-12 h-12 rounded-xl bg-purple-50 border-2 border-purple-300 flex items-center justify-center text-purple-700 group-hover:scale-110 transition-transform shadow-xs">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 border-2 border-purple-300 flex items-center justify-center text-purple-700 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-xs">
                 <Shield size={24} />
               </div>
-              <span className={`text-xs font-bold text-purple-900 bg-purple-100/80 px-3 py-1 rounded-full border border-purple-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
+              <span className={`text-xs font-bold text-purple-900 bg-purple-100/90 backdrop-blur-sm px-3 py-1 rounded-full border border-purple-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
                 {t('role_admin')}
               </span>
             </div>
             <div className="pl-2">
               <h3 className={`text-lg font-bold text-slate-900 mb-1 group-hover:text-purple-700 transition-colors flex items-center justify-between ${isUrdu ? 'font-urdu' : ''}`}>
                 <span>{t('adminCardTitle')}</span>
-                <ArrowRight size={18} className={`text-purple-600 group-hover:translate-x-1 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
+                <ArrowRight size={18} className={`text-purple-600 group-hover:translate-x-1.5 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
               </h3>
               <p className={`text-xs text-slate-600 leading-relaxed font-medium ${isUrdu ? 'font-urdu text-sm' : ''}`}>
                 {t('adminCardDesc')}
@@ -288,20 +288,20 @@ const Home = () => {
           </Link>
 
           {/* Truck Owner Card */}
-          <Link to="/truck-owner" className="glass-card bg-white border-2 border-cyan-300 hover:border-cyan-600 hover:-translate-y-1.5 group relative overflow-hidden shadow-sm hover:shadow-2xl transition-all">
-            <div className="absolute top-0 left-0 bottom-0 w-2.5 bg-gradient-to-b from-cyan-400 via-amber-500 to-rose-500"></div>
+          <Link to="/truck-owner" className="glass-card-3d border-2 border-cyan-300/80 hover:border-cyan-500 group relative overflow-hidden transition-all">
+            <div className="absolute top-0 left-0 bottom-0 w-2 bg-gradient-to-b from-cyan-400 via-amber-500 to-rose-500"></div>
             <div className="flex items-start justify-between mb-3 pl-2">
-              <div className="w-12 h-12 rounded-xl bg-cyan-50 border-2 border-cyan-300 flex items-center justify-center text-cyan-800 group-hover:scale-110 transition-transform shadow-xs">
+              <div className="w-12 h-12 rounded-xl bg-cyan-50 border-2 border-cyan-300 flex items-center justify-center text-cyan-800 group-hover:scale-110 group-hover:-rotate-3 transition-transform shadow-xs">
                 <Truck size={24} />
               </div>
-              <span className={`text-xs font-bold text-cyan-900 bg-cyan-100 px-3 py-1 rounded-full border border-cyan-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
+              <span className={`text-xs font-bold text-cyan-900 bg-cyan-100/90 backdrop-blur-sm px-3 py-1 rounded-full border border-cyan-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
                 {t('role_truck_owner')}
               </span>
             </div>
             <div className="pl-2">
               <h3 className={`text-lg font-bold text-slate-900 mb-1 group-hover:text-cyan-700 transition-colors flex items-center justify-between ${isUrdu ? 'font-urdu' : ''}`}>
                 <span>{t('truckOwnerCardTitle')}</span>
-                <ArrowRight size={18} className={`text-cyan-600 group-hover:translate-x-1 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
+                <ArrowRight size={18} className={`text-cyan-600 group-hover:translate-x-1.5 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
               </h3>
               <p className={`text-xs text-slate-600 leading-relaxed font-medium ${isUrdu ? 'font-urdu text-sm' : ''}`}>
                 {t('truckOwnerCardDesc')}
@@ -310,20 +310,20 @@ const Home = () => {
           </Link>
 
           {/* Transporter Card */}
-          <Link to="/transporter" className="glass-card bg-white border-2 border-cyan-400 hover:border-cyan-600 hover:-translate-y-1.5 group relative overflow-hidden shadow-sm hover:shadow-2xl transition-all">
-            <div className="absolute top-0 left-0 bottom-0 w-2.5 bg-gradient-to-b from-cyan-500 via-blue-600 to-pink-500"></div>
+          <Link to="/transporter" className="glass-card-3d border-2 border-cyan-400/80 hover:border-cyan-600 group relative overflow-hidden transition-all">
+            <div className="absolute top-0 left-0 bottom-0 w-2 bg-gradient-to-b from-cyan-500 via-blue-600 to-pink-500"></div>
             <div className="flex items-start justify-between mb-3 pl-2">
-              <div className="w-12 h-12 rounded-xl bg-cyan-50 border-2 border-cyan-400 flex items-center justify-center text-cyan-800 group-hover:scale-110 transition-transform shadow-xs">
+              <div className="w-12 h-12 rounded-xl bg-cyan-50 border-2 border-cyan-400 flex items-center justify-center text-cyan-800 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-xs">
                 <Briefcase size={24} />
               </div>
-              <span className={`text-xs font-bold text-cyan-900 bg-cyan-100 px-3 py-1 rounded-full border border-cyan-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
+              <span className={`text-xs font-bold text-cyan-900 bg-cyan-100/90 backdrop-blur-sm px-3 py-1 rounded-full border border-cyan-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
                 {t('role_transporter')}
               </span>
             </div>
             <div className="pl-2">
               <h3 className={`text-lg font-bold text-slate-900 mb-1 group-hover:text-cyan-700 transition-colors flex items-center justify-between ${isUrdu ? 'font-urdu' : ''}`}>
                 <span>{t('transporterCardTitle')}</span>
-                <ArrowRight size={18} className={`text-cyan-600 group-hover:translate-x-1 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
+                <ArrowRight size={18} className={`text-cyan-600 group-hover:translate-x-1.5 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
               </h3>
               <p className={`text-xs text-slate-600 leading-relaxed font-medium ${isUrdu ? 'font-urdu text-sm' : ''}`}>
                 {t('transporterCardDesc')}
@@ -332,20 +332,20 @@ const Home = () => {
           </Link>
 
           {/* Business Shipper Card */}
-          <Link to="/business" className="glass-card bg-white border-2 border-emerald-400 hover:border-emerald-600 hover:-translate-y-1.5 group relative overflow-hidden shadow-sm hover:shadow-2xl transition-all">
-            <div className="absolute top-0 left-0 bottom-0 w-2.5 bg-gradient-to-b from-emerald-500 via-yellow-400 to-red-600"></div>
+          <Link to="/business" className="glass-card-3d border-2 border-emerald-400/80 hover:border-emerald-600 group relative overflow-hidden transition-all">
+            <div className="absolute top-0 left-0 bottom-0 w-2 bg-gradient-to-b from-emerald-500 via-yellow-400 to-red-600"></div>
             <div className="flex items-start justify-between mb-3 pl-2">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 border-2 border-emerald-400 flex items-center justify-center text-emerald-800 group-hover:scale-110 transition-transform shadow-xs">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 border-2 border-emerald-400 flex items-center justify-center text-emerald-800 group-hover:scale-110 group-hover:-rotate-3 transition-transform shadow-xs">
                 <Building2 size={24} />
               </div>
-              <span className={`text-xs font-bold text-emerald-900 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
+              <span className={`text-xs font-bold text-emerald-900 bg-emerald-100/90 backdrop-blur-sm px-3 py-1 rounded-full border border-emerald-300 shadow-xs ${isUrdu ? 'font-urdu text-sm' : 'font-sans'}`}>
                 {t('role_business')}
               </span>
             </div>
             <div className="pl-2">
               <h3 className={`text-lg font-bold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors flex items-center justify-between ${isUrdu ? 'font-urdu' : ''}`}>
                 <span>{t('businessCardTitle')}</span>
-                <ArrowRight size={18} className={`text-emerald-600 group-hover:translate-x-1 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
+                <ArrowRight size={18} className={`text-emerald-600 group-hover:translate-x-1.5 transition-transform ${isUrdu ? 'rotate-180' : ''}`} />
               </h3>
               <p className={`text-xs text-slate-600 leading-relaxed font-medium ${isUrdu ? 'font-urdu text-sm' : ''}`}>
                 {t('businessCardDesc')}
@@ -383,26 +383,27 @@ function App() {
                     <Profile />
                   </ProtectedRoute>
                 } />
-                <Route path="/admin" element={
-                  <ProtectedRoute allowedRoles={['admin']}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/truck-owner" element={
-                  <ProtectedRoute allowedRoles={['truck_owner']}>
-                    <TruckOwnerDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/transporter" element={
-                  <ProtectedRoute allowedRoles={['transporter']}>
-                    <TransporterDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/business" element={
-                  <ProtectedRoute allowedRoles={['business']}>
-                    <BusinessDashboard />
-                  </ProtectedRoute>
-                } />
+                {/* Admin Portals */}
+                <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+
+                {/* Fleet Owner / Truck Owner Portals */}
+                <Route path="/truck-owner" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+                <Route path="/truck-owner/dashboard" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+                <Route path="/fleet-owner" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+                <Route path="/fleet-owner/dashboard" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+                <Route path="/fleet" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+                <Route path="/fleet/dashboard" element={<ProtectedRoute allowedRoles={['truck_owner', 'fleet_owner', 'driver']}><TruckOwnerDashboard /></ProtectedRoute>} />
+
+                {/* Transporter Portals */}
+                <Route path="/transporter" element={<ProtectedRoute allowedRoles={['transporter']}><TransporterDashboard /></ProtectedRoute>} />
+                <Route path="/transporter/dashboard" element={<ProtectedRoute allowedRoles={['transporter']}><TransporterDashboard /></ProtectedRoute>} />
+
+                {/* Business / Shipper Portals */}
+                <Route path="/business" element={<ProtectedRoute allowedRoles={['business', 'shipper']}><BusinessDashboard /></ProtectedRoute>} />
+                <Route path="/business/dashboard" element={<ProtectedRoute allowedRoles={['business', 'shipper']}><BusinessDashboard /></ProtectedRoute>} />
+                <Route path="/shipper" element={<ProtectedRoute allowedRoles={['business', 'shipper']}><BusinessDashboard /></ProtectedRoute>} />
+                <Route path="/shipper/dashboard" element={<ProtectedRoute allowedRoles={['business', 'shipper']}><BusinessDashboard /></ProtectedRoute>} />
               </Routes>
             </main>
           </div>

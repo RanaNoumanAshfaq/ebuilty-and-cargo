@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Printer, Download, FileText, Loader2 } from 'lucide-react';
 import { generateBiltyPDFBlob, generateBiltyPDF } from '../utils/generateBiltyPDF';
-import { ChamakRibbon, TruckTaj } from './TruckArt';
+import { ChamakRibbon } from './TruckArt';
 
 /**
  * BiltyModal – shows the generated PDF embedded in an iframe with Print & Download actions.
@@ -90,21 +90,21 @@ export default function BiltyModal({ booking, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4 py-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xl px-4 py-6"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div 
-        className="bg-white border-2 border-amber-300 rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden relative"
+        className="bg-white/95 backdrop-blur-2xl border-2 border-cyan-400 rounded-3xl shadow-[0_30px_80px_rgba(2,132,199,0.35),0_15px_35px_rgba(124,58,237,0.25)] w-full max-w-4xl flex flex-col overflow-hidden relative modal-enter"
         style={{ maxHeight: '92vh' }}
       >
         {/* Top Chamak Patti Ribbon */}
         <ChamakRibbon height="h-[5px]" />
 
         {/* ── Modal Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-amber-200 shrink-0 bg-gradient-to-r from-amber-50 via-rose-50 to-amber-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-cyan-200 shrink-0 bg-gradient-to-r from-sky-50/90 via-purple-50/80 to-amber-50/80">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center shadow-sm">
-              <TruckTaj size={26} />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-sm overflow-hidden shrink-0">
+              <img src="/logo.jpg" alt="E-CARGO-BILTY" className="w-full h-full object-cover rounded-[14px]" />
             </div>
             <div className="text-left">
               <div className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export default function BiltyModal({ booking, onClose }) {
         {/* ── Footer hint ── */}
         <div className="px-6 py-2.5 border-t border-amber-200 bg-amber-50/70 flex items-center justify-between text-[11px] text-slate-600 shrink-0 font-mono">
           <span>Official 100% Verified Consignment Note • jsPDF AutoTable Engine</span>
-          <span className="font-urdu text-red-700 font-bold text-sm">دیکھ مگر پیار سے</span>
+          <span className="font-urdu text-emerald-800 font-bold text-sm">تصدیق شدہ لاری بلٹی • قانونی دستاویز</span>
         </div>
       </div>
     </div>

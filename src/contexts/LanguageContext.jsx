@@ -24,16 +24,16 @@ export const translations = {
     role_business: 'Business Shipper',
 
     // Badges & Slogans (English only when in EN mode)
-    badgePeacock: 'Peacock & Falcon Fleet',
-    badgeNazar: 'Protected Transit',
+    badgePeacock: 'E-CARGO-BILTY',
+    badgeNazar: 'Verified Freight Safety',
     badgeRoad: 'National Highway Network',
-    badgeWorkshop: 'Sindh & Khyber Logistics Workshop',
-    poetryBanner: 'Keep Distance • Safe Transit Across Pakistan',
-    poetrySubtext: 'Official Lorry Receipt • Safe Highway Transit',
-    mottoLookLove: 'Look With Kindness',
-    mottoSafeJourney: 'Safe & Prosperous Journey',
-    mottoGraceGod: 'By God\'s Grace',
-    heritageBadge: 'National Folk Heritage',
+    badgeWorkshop: 'Nationwide Logistics Network',
+    poetryBanner: 'Reliable Logistics • Secure & On-Time Delivery Across Pakistan',
+    poetrySubtext: 'Official Digital Lorry Receipt • Verified Cargo Network',
+    mottoLookLove: 'Quality, Integrity & Security',
+    mottoSafeJourney: 'Safe & Timely Transit',
+    mottoGraceGod: 'Nationwide Excellence',
+    heritageBadge: 'National Logistics Network',
 
     // Home Page
     homeTag: 'PAKISTANI CARGO FREIGHT NETWORK',
@@ -107,16 +107,16 @@ export const translations = {
     role_business: 'تاجر / کاروباری',
 
     // Badges & Slogans (Urdu only when in UR mode)
-    badgePeacock: 'مور و شاہین',
-    badgeNazar: 'چشمِ بد دور',
+    badgePeacock: 'ای کارگو بلٹی',
+    badgeNazar: 'محفوظ و مصدقہ ترسیل',
     badgeRoad: 'شاہراہِ پاکستان',
-    badgeWorkshop: 'سندھ و خیبر لاجسٹکس ورکشاپ',
-    poetryBanner: 'فاصلہ رکھیں ورنہ پیار ہو جائے گا',
-    poetrySubtext: 'سرکاری لاری بلٹی • ملک گیر محفوظ ترسیل',
-    mottoLookLove: 'دیکھ مگر پیار سے',
-    mottoSafeJourney: 'سفرِ خیر و عافیت',
-    mottoGraceGod: 'ماشاءاللہ',
-    heritageBadge: 'لوک ورثہ',
+    badgeWorkshop: 'ملک گیر لاجسٹکس نیٹ ورک',
+    poetryBanner: 'محفوظ باربرداری • ملک گیر بااعتماد اور بروقت ترسیل',
+    poetrySubtext: 'سرکاری ڈیجیٹل لاری بلٹی • تصدیق شدہ کارگو نیٹ ورک',
+    mottoLookLove: 'معیار، دیانت اور تحفظ',
+    mottoSafeJourney: 'محفوظ سفر و بروقت ترسیل',
+    mottoGraceGod: 'معیاری باربرداری',
+    heritageBadge: 'قومی لاجسٹکس نیٹ ورک',
 
     // Home Page
     homeTag: 'شاہراہِ پاکستان کارگو نیٹ ورک',

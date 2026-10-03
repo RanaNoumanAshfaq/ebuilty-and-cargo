@@ -18,14 +18,22 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && userData && !allowedRoles.includes(userData.role)) {
-    // If user doesn't have the correct role for this route, redirect to their own portal dashboard
-    const ownDashboard = 
-      userData.role === 'admin' ? '/admin' :
-      userData.role === 'truck_owner' ? '/truck-owner' :
-      userData.role === 'transporter' ? '/transporter' :
-      userData.role === 'business' ? '/business' : '/';
-    return <Navigate to={ownDashboard} replace />;
+  if (allowedRoles && userData) {
+    const userRole = userData.role;
+    const isAllowed = allowedRoles.includes(userRole) ||
+      (allowedRoles.includes('business') && userRole === 'shipper') ||
+      (allowedRoles.includes('shipper') && userRole === 'business') ||
+      (allowedRoles.includes('truck_owner') && (userRole === 'fleet_owner' || userRole === 'driver')) ||
+      (allowedRoles.includes('fleet_owner') && (userRole === 'truck_owner' || userRole === 'driver'));
+
+    if (!isAllowed) {
+      const ownDashboard = 
+        userRole === 'admin' ? '/admin/dashboard' :
+        (userRole === 'truck_owner' || userRole === 'fleet_owner' || userRole === 'driver') ? '/fleet-owner/dashboard' :
+        userRole === 'transporter' ? '/transporter/dashboard' :
+        '/shipper/dashboard';
+      return <Navigate to={ownDashboard} replace />;
+    }
   }
 
   return children;

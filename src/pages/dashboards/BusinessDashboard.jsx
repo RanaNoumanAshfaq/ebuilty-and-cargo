@@ -9,6 +9,7 @@ import {
 import { useState, useEffect, useMemo } from 'react';
 import { logisticsAPI, authAPI, socket } from '../../api';
 import { generateBiltyPDF } from '../../utils/generateBiltyPDF';
+import BiltyModal from '../../components/BiltyModal';
 import { ChamakRibbon, TruckTaj, UrduMotto, WorkshopBadge, TruckPoetryBanner, SindhiTruckTexture, TruckPatternBorder, TruckLotusArchBadge, TruckMorBadge, NazarBattuBadge } from '../../components/TruckArt';
 import MapViewer, { getCoordinatesForLocation } from '../../components/MapViewer';
 import { 
@@ -18,6 +19,26 @@ import {
   SPECIAL_HANDLING_FLAGS, 
   PAYMENT_TERMS_OPTIONS 
 } from '../../utils/fareCalculator';
+import SearchSelect from '../../components/SearchSelect';
+import UnitInput from '../../components/UnitInput';
+import FormField from '../../components/FormField';
+import { 
+  PAKISTAN_CITIES, 
+  CARGO_CATEGORIES, 
+  VEHICLE_TYPES, 
+  WEIGHT_UNITS, 
+  DIMENSION_UNITS, 
+  RATE_TYPES, 
+  convertToTons 
+} from '../../data/logisticsData';
+import { 
+  formatPhone, 
+  formatNTN, 
+  validatePhone, 
+  validateNTN, 
+  validatePositiveNumber, 
+  validateRequired 
+} from '../../utils/validation';
 
 export default function BusinessDashboard() {
   const { userData, currentUser } = useAuth();
@@ -35,7 +56,7 @@ export default function BusinessDashboard() {
   const [selectedTransporter, setSelectedTransporter] = useState(null);
   
   const [products, setProducts] = useState([
-    { name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }
+    { name: '', qty: '', unitWeight: '', weightUnit: 'ton', type: 'Textiles', lengthCm: '', widthCm: '', heightCm: '', dimensionUnit: 'cm' }
   ]);
 
   const [packagingType, setPackagingType] = useState('Cartons / Boxes');
@@ -44,6 +65,9 @@ export default function BusinessDashboard() {
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('Prepaid');
   const [vehicleTypeChoice, setVehicleTypeChoice] = useState('18-Wheeler Trailer');
+  const [rateType, setRateType] = useState('ton-km');
+  const [formErrors, setFormErrors] = useState({});
+  const [formSubmitted, setFormSubmitted] = useState(false);
 
   const [pickupDetails, setPickupDetails] = useState({
     streetAddress: '',
@@ -60,6 +84,7 @@ export default function BusinessDashboard() {
 
   // Track Shipments selection state
   const [selectedCargo, setSelectedCargo] = useState(null);
+  const [biltyModalBooking, setBiltyModalBooking] = useState(null);
 
   const fetchData = async () => {
     if (currentUser) {
@@ -104,9 +129,34 @@ export default function BusinessDashboard() {
     }
   }, [cargoList]);
 
+  // Auto pre-fill saved business names, shipper contact info, and addresses from user profile
+  useEffect(() => {
+    if (userData || currentUser) {
+      setPickupDetails(prev => ({
+        ...prev,
+        contactPerson: prev.contactPerson || userData?.name || currentUser?.name || '',
+        contactPhone: prev.contactPhone || userData?.phone || currentUser?.phone || '',
+        streetAddress: prev.streetAddress || (userData?.businessName ? `${userData.businessName} Logistics Yard` : '')
+      }));
+      if (!senderNTN && userData?.businessRegNumber) {
+        setSenderNTN(userData.businessRegNumber);
+      }
+    }
+  }, [userData, currentUser]);
+
   // Products utilities
   const addProductRow = () => {
-    setProducts([...products, { name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }]);
+    setProducts([...products, { 
+      name: '', 
+      qty: '', 
+      unitWeight: '', 
+      weightUnit: 'ton', 
+      type: 'Textiles', 
+      lengthCm: '', 
+      widthCm: '', 
+      heightCm: '', 
+      dimensionUnit: 'cm' 
+    }]);
   };
 
   const removeProductRow = (idx) => {
@@ -134,19 +184,31 @@ export default function BusinessDashboard() {
     setRecipients(updated);
   };
 
-  // Auto-calculated gross weight (total sum of Qty * UnitWeight in tons)
+  // Auto-calculated gross weight converting any unit (Kg, Ton, Maund, Quintal) into Metric Tons
   const calculateGrossWeight = () => {
     return products.reduce((sum, p) => {
       const qty = parseFloat(p.qty) || 0;
-      const wt = parseFloat(p.unitWeight) || 0;
-      return sum + (qty * wt);
+      const wtInTons = convertToTons(p.unitWeight, p.weightUnit || 'ton');
+      return sum + (qty * wtInTons);
     }, 0);
   };
 
-  // Auto-calculated volumetric weight (sum of (L * W * H / 5000) * Qty / 1000 in tons)
+  // Auto-calculated volumetric weight with dimensional unit support
   const calculateTotalVolumetricWeight = () => {
     return products.reduce((sum, p) => {
-      const vol = calculateVolumetricWeight(p.lengthCm, p.widthCm, p.heightCm, p.qty);
+      let l = parseFloat(p.lengthCm) || 0;
+      let w = parseFloat(p.widthCm) || 0;
+      let h = parseFloat(p.heightCm) || 0;
+      if (p.dimensionUnit === 'meter') {
+        l *= 100;
+        w *= 100;
+        h *= 100;
+      } else if (p.dimensionUnit === 'feet') {
+        l *= 30.48;
+        w *= 30.48;
+        h *= 30.48;
+      }
+      const vol = calculateVolumetricWeight(l, w, h, p.qty);
       return sum + vol.tons;
     }, 0);
   };
@@ -175,14 +237,76 @@ export default function BusinessDashboard() {
     }
   };
 
+  // Strict Form Validation
+  const validateForm = () => {
+    const errors = {};
+
+    if (!selectedTransporter) {
+      errors.transporter = isUrdu ? 'برائے مہربانی پہلے ٹرانسپورٹر کا انتخاب کریں' : 'Please select a transporter for this shipment';
+    }
+
+    // Validate products
+    products.forEach((p, idx) => {
+      if (!p.name?.trim()) {
+        errors[`prod_${idx}_name`] = isUrdu ? 'پروڈکٹ کا نام درج کریں' : 'Product name is required';
+      }
+      const qtyErr = validatePositiveNumber(p.qty, 'Quantity', isUrdu);
+      if (qtyErr) errors[`prod_${idx}_qty`] = qtyErr;
+      const wtErr = validatePositiveNumber(p.unitWeight, 'Unit Weight', isUrdu);
+      if (wtErr) errors[`prod_${idx}_wt`] = wtErr;
+    });
+
+    // Validate pickup details
+    if (!pickupDetails.streetAddress?.trim()) {
+      errors.pickupAddress = isUrdu ? 'روانگی کا پتہ درج کریں' : 'Pickup street address is required';
+    }
+    if (!pickupDetails.city?.trim()) {
+      errors.pickupCity = isUrdu ? 'روانگی کا شہر منتخب کریں' : 'Pickup city is required';
+    }
+    if (!pickupDetails.contactPerson?.trim()) {
+      errors.pickupContact = isUrdu ? 'رابطہ کار کا نام درج کریں' : 'Contact person name is required';
+    }
+    const phoneErr = validatePhone(pickupDetails.contactPhone, isUrdu);
+    if (phoneErr) errors.pickupPhone = phoneErr;
+
+    // Validate recipients
+    recipients.forEach((r, idx) => {
+      if (!r.fullName?.trim()) {
+        errors[`recip_${idx}_name`] = isUrdu ? 'وصول کنندہ کا نام درج کریں' : 'Consignee full name is required';
+      }
+      const rPhoneErr = validatePhone(r.phone, isUrdu);
+      if (rPhoneErr) errors[`recip_${idx}_phone`] = rPhoneErr;
+      if (!r.city?.trim()) {
+        errors[`recip_${idx}_city`] = isUrdu ? 'منزل کا شہر منتخب کریں' : 'Destination city is required';
+      }
+      if (!r.streetAddress?.trim()) {
+        errors[`recip_${idx}_address`] = isUrdu ? 'منزل کا پتہ درج کریں' : 'Destination delivery address is required';
+      }
+      if (!r.deadline) {
+        errors[`recip_${idx}_deadline`] = isUrdu ? 'آخری تاریخ منتخب کریں' : 'Delivery deadline date is required';
+      }
+    });
+
+    // Validate sender NTN if provided
+    if (senderNTN) {
+      const ntnErr = validateNTN(senderNTN, isUrdu, false);
+      if (ntnErr) errors.senderNTN = ntnErr;
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleRequestSubmit = async (e, status = 'Pending') => {
     e.preventDefault();
-    if (!selectedTransporter) {
-      alert("Please select a transporter first!");
+    setFormSubmitted(true);
+
+    if (!validateForm()) {
+      alert(isUrdu ? 'برائے مہربانی فارم میں نشان زدہ غلطیوں کو درست کریں' : 'Please fix the highlighted form errors before proceeding.');
       return;
     }
 
-    const cargoTitle = products.map(p => `${p.name || 'Goods'} (x${p.qty || 1})`).join(', ');
+    const cargoTitle = products.map(p => `${p.name || 'Goods'} (x${p.qty || 1} ${p.weightUnit || 'ton'})`).join(', ');
 
     const payload = {
       title: cargoTitle,
@@ -194,6 +318,8 @@ export default function BusinessDashboard() {
       senderNTN: senderNTN || null,
       deliveryNotes: deliveryNotes || null,
       paymentTerms,
+      vehicleTypeChoice,
+      rateType,
       baseFare: tariffQuote.baseFreight,
       fuelSurcharge: tariffQuote.fuelSurcharge,
       taxAmount: tariffQuote.salesTax,
@@ -206,11 +332,13 @@ export default function BusinessDashboard() {
         name: p.name,
         category: p.type,
         qty: parseInt(p.qty) || 1,
-        unitWeight: p.unitWeight,
+        unitWeight: parseFloat(p.unitWeight) || 0,
+        weightUnit: p.weightUnit || 'ton',
         dimensions: {
           lengthCm: p.lengthCm || 0,
           widthCm: p.widthCm || 0,
-          heightCm: p.heightCm || 0
+          heightCm: p.heightCm || 0,
+          unit: p.dimensionUnit || 'cm'
         }
       })),
       pickupDetails: {
@@ -223,21 +351,24 @@ export default function BusinessDashboard() {
         name: r.fullName,
         phone: r.phone,
         address: `${r.streetAddress}, ${r.city}, ${r.province}`,
-        expectedDate: r.deadline
+        expectedDate: r.deadline,
+        assignedProducts: r.assignedProducts
       }))
     };
 
     try {
       await logisticsAPI.postCargo(payload);
-      alert(status === 'Draft' ? 'Shipment saved as draft!' : 'Request submitted successfully with verified tariff!');
+      alert(status === 'Draft' ? 'Shipment saved as draft!' : 'Request submitted successfully with verified tariff and unit specs!');
       
       // Reset forms
       setSelectedTransporter(null);
-      setProducts([{ name: '', qty: '', unitWeight: '', type: 'Industrial', lengthCm: '', widthCm: '', heightCm: '' }]);
+      setProducts([{ name: '', qty: '', unitWeight: '', weightUnit: 'ton', type: 'Textiles', lengthCm: '', widthCm: '', heightCm: '', dimensionUnit: 'cm' }]);
       setPackagingType('Cartons / Boxes');
       setSpecialHandling([]);
       setSenderNTN('');
       setDeliveryNotes('');
+      setFormErrors({});
+      setFormSubmitted(false);
       setPickupDetails({ streetAddress: '', city: '', province: '', landmark: '', contactPerson: '', contactPhone: '' });
       setRecipients([{ fullName: '', phone: '', city: '', province: '', streetAddress: '', deadline: '', assignedProducts: '' }]);
       
@@ -245,6 +376,7 @@ export default function BusinessDashboard() {
       setActiveTab('track');
     } catch (err) {
       console.error("Error posting cargo:", err);
+      alert("Failed to submit freight request: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -311,7 +443,7 @@ export default function BusinessDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative page-enter">
       {/* Truck Art Pattern Ribbon */}
       <TruckPatternBorder height="h-7" className="rounded-xl mb-4 shadow-sm" />
 
@@ -334,8 +466,8 @@ export default function BusinessDashboard() {
           <p className="text-sm text-slate-600 mt-1 font-medium">{isUrdu ? 'ٹرانسپورٹرز بک کریں، کارگو ٹریک کریں اور بلٹی حاصل کریں' : 'Book transporters, request shipments, and track cargo bilties in real-time.'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex gap-2 bg-white border-2 border-emerald-400 px-4 py-2 rounded-xl text-xs text-emerald-900 font-mono shadow-sm">
-            <Clock size={14} className="text-red-600" />
+          <div className="flex gap-2 bg-white/90 backdrop-blur-md border-2 border-emerald-400 px-4 py-2 rounded-xl text-xs text-emerald-900 font-mono shadow-sm">
+            <Clock size={14} className="text-red-600 animate-pulse" />
             <span>Operational Session: {new Date().toLocaleDateString()}</span>
           </div>
         </div>
@@ -359,10 +491,10 @@ export default function BusinessDashboard() {
                 setActiveTab(tab.id);
                 setSelectedCargo(null);
               }}
-              className={`pb-3 text-sm font-semibold transition-all relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              className={`pb-3 text-sm font-semibold transition-all duration-300 relative flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id 
-                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'text-red-700 border-b-2 border-red-600 font-extrabold drop-shadow-sm scale-[1.02]' 
+                  : 'text-slate-600 hover:text-slate-900 hover:scale-[1.01]'
               }`}
             >
               {tab.name}
@@ -379,27 +511,44 @@ export default function BusinessDashboard() {
           <form onSubmit={(e) => handleRequestSubmit(e, 'Pending')} className="space-y-8 text-left">
             
             {/* Step 1: SELECT TRANSPORTER */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
+            <div className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-4 transition-all duration-300 hover:shadow-2xl">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">1</span>
+                  <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-sm">1</span>
                   {isUrdu ? 'ٹرانسپورٹر کا انتخاب' : 'Select Transporter'}
                 </h3>
                 {selectedTransporter && (
-                  <span className="text-xs font-mono text-red-700 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200 font-bold">
+                  <span className="text-xs font-mono text-red-700 bg-red-50/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-red-200 font-bold shadow-xs">
                     Selected: {selectedTransporter.name}
                   </span>
                 )}
               </div>
+
+              {formErrors.transporter && (
+                <div className="bg-red-50 border-2 border-red-400 text-red-700 text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 animate-shake">
+                  <AlertCircle size={16} className="text-red-600 shrink-0" />
+                  <span>{formErrors.transporter}</span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {transporters.map(t => (
                   <div
                     key={t._id}
-                    onClick={() => setSelectedTransporter(t)}
-                    className={`p-5 rounded-2xl border text-left cursor-pointer transition-all relative overflow-hidden ${
+                    onClick={() => {
+                      setSelectedTransporter(t);
+                      if (formErrors.transporter) {
+                        setFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.transporter;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`p-5 rounded-2xl border text-left cursor-pointer transition-all duration-300 relative overflow-hidden glass-card-3d ${
                       selectedTransporter?._id === t._id
-                        ? 'bg-amber-50 border-2 border-red-600 shadow-md'
-                        : 'bg-[#FAF7EE] border-amber-200 hover:border-amber-400'
+                        ? 'bg-amber-50/90 border-2 border-red-600 shadow-xl -translate-y-1'
+                        : 'bg-[#FAF7EE]/80 border-amber-200/80 hover:border-amber-400 hover:-translate-y-1 hover:shadow-lg'
                     }`}
                   >
                     {selectedTransporter?._id === t._id && (
@@ -411,14 +560,14 @@ export default function BusinessDashboard() {
                         <p className="text-xs text-slate-600 mt-1 font-mono">{t.phone || '0300-1112223'} &middot; {t.shipmentsCount || 0} shipments</p>
                         <p className="text-[11px] text-slate-500 mt-3 font-medium">Common Hubs: Lahore, Karachi, Peshawar, Quetta</p>
                       </div>
-                      <span className="text-xs font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300 font-mono">
+                      <span className="text-xs font-bold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-lg border border-amber-300 font-mono shadow-2xs">
                         {getTransporterRating(t.shipmentsCount || 0)}
                       </span>
                     </div>
                   </div>
                 ))}
                 {transporters.length === 0 && (
-                  <div className="col-span-2 text-center py-8 text-slate-500 italic bg-[#FAF7EE] rounded-2xl border border-amber-200">
+                  <div className="col-span-2 text-center py-8 text-slate-500 italic bg-[#FAF7EE]/70 rounded-2xl border border-amber-200">
                     No transporters available. Please verify registered transporters in Admin panel.
                   </div>
                 )}
@@ -426,11 +575,11 @@ export default function BusinessDashboard() {
             </div>
 
             {/* Step 2: PRODUCTS, PACKAGING & VOLUMETRIC SPECS */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
+            <div className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-4 transition-all duration-300 hover:shadow-2xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">2</span>
-                  {isUrdu ? 'مال کی تفصیلات اور پیکجنگ' : 'Cargo Products, Packaging & Volumetric Weight'}
+                  {isUrdu ? 'مال کی تفصیلات اور پیمائش' : 'Cargo Products, Packaging & Unit Dimensions'}
                 </h3>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
@@ -457,8 +606,16 @@ export default function BusinessDashboard() {
 
               <div className="space-y-4">
                 {products.map((prod, idx) => {
-                  const vol = calculateVolumetricWeight(prod.lengthCm, prod.widthCm, prod.heightCm, prod.qty);
-                  const grossItemTons = (parseFloat(prod.qty) || 0) * (parseFloat(prod.unitWeight) || 0);
+                  let l = parseFloat(prod.lengthCm) || 0;
+                  let w = parseFloat(prod.widthCm) || 0;
+                  let h = parseFloat(prod.heightCm) || 0;
+                  if (prod.dimensionUnit === 'meter') {
+                    l *= 100; w *= 100; h *= 100;
+                  } else if (prod.dimensionUnit === 'feet') {
+                    l *= 30.48; w *= 30.48; h *= 30.48;
+                  }
+                  const vol = calculateVolumetricWeight(l, w, h, prod.qty);
+                  const grossItemTons = (parseFloat(prod.qty) || 0) * convertToTons(prod.unitWeight, prod.weightUnit || 'ton');
 
                   return (
                     <div key={idx} className="bg-[#FAF7EE] border border-amber-200/80 p-4 rounded-2xl relative space-y-3">
@@ -472,55 +629,142 @@ export default function BusinessDashboard() {
                         </button>
                       )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                        <div className="md:col-span-4">
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Product Name</label>
-                          <input required type="text" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Cotton Textiles / Machinery" />
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                        <div className="md:col-span-3">
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                            Product Name <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            value={prod.name} 
+                            onChange={e => handleProductChange(idx, 'name', e.target.value)} 
+                            className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                              formErrors[`prod_${idx}_name`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                            }`} 
+                            placeholder="e.g. Cotton Textiles / Machinery" 
+                          />
+                          {formErrors[`prod_${idx}_name`] && (
+                            <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`prod_${idx}_name`]}</p>
+                          )}
                         </div>
+
                         <div className="md:col-span-2">
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Quantity</label>
-                          <input required type="number" value={prod.qty} onChange={e => handleProductChange(idx, 'qty', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="Units" />
+                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            value={prod.qty} 
+                            onChange={e => handleProductChange(idx, 'qty', e.target.value)} 
+                            className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                              formErrors[`prod_${idx}_qty`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                            }`} 
+                            placeholder="e.g. 50" 
+                          />
+                          {formErrors[`prod_${idx}_qty`] && (
+                            <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`prod_${idx}_qty`]}</p>
+                          )}
                         </div>
+
+                        <div className="md:col-span-3">
+                          <UnitInput 
+                            label="Unit Weight"
+                            value={prod.unitWeight}
+                            onChange={(val) => handleProductChange(idx, 'unitWeight', val)}
+                            selectedUnit={prod.weightUnit || 'ton'}
+                            onUnitChange={(unit) => handleProductChange(idx, 'weightUnit', unit)}
+                            units={WEIGHT_UNITS}
+                            placeholder="Weight"
+                            required
+                            error={formErrors[`prod_${idx}_wt`]}
+                            isUrdu={isUrdu}
+                          />
+                        </div>
+
                         <div className="md:col-span-2">
-                          <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Unit Wt (Tons)</label>
-                          <input required type="number" step="any" value={prod.unitWeight} onChange={e => handleProductChange(idx, 'unitWeight', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="Tons" />
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Item Wt</label>
+                          <input 
+                            disabled 
+                            type="text" 
+                            value={`${grossItemTons.toFixed(2)} Tons`} 
+                            className="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono font-bold" 
+                          />
                         </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Wt</label>
-                          <input disabled type="text" value={`${grossItemTons.toFixed(2)} tons`} className="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono font-bold" />
-                        </div>
+
                         <div className="md:col-span-2">
                           <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Category</label>
-                          <select value={prod.type} onChange={e => handleProductChange(idx, 'type', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500">
-                            <option value="Industrial">Industrial</option>
-                            <option value="Agricultural">Agricultural</option>
-                            <option value="Textiles">Textiles</option>
-                            <option value="Chemicals">Chemicals</option>
-                            <option value="Electronics">Electronics</option>
-                            <option value="Construction">Construction</option>
-                            <option value="General">General</option>
+                          <select 
+                            value={prod.type} 
+                            onChange={e => handleProductChange(idx, 'type', e.target.value)} 
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500"
+                          >
+                            {CARGO_CATEGORIES.map(cat => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name} {isUrdu ? `(${cat.urdu})` : ''}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
 
-                      {/* Volumetric Dimensions Row (L x W x H in cm) */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2 border-t border-amber-200/50 items-center">
+                      {/* Volumetric Dimensions Row with Unit Selector */}
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 pt-2 border-t border-amber-200/50 items-end">
                         <div>
-                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Length (cm)</label>
-                          <input type="number" value={prod.lengthCm || ''} onChange={e => handleProductChange(idx, 'lengthCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 120" />
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            Length ({prod.dimensionUnit || 'cm'})
+                          </label>
+                          <input 
+                            type="number" 
+                            step="any"
+                            value={prod.lengthCm || ''} 
+                            onChange={e => handleProductChange(idx, 'lengthCm', e.target.value)} 
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" 
+                            placeholder="e.g. 120" 
+                          />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Width (cm)</label>
-                          <input type="number" value={prod.widthCm || ''} onChange={e => handleProductChange(idx, 'widthCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 80" />
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            Width ({prod.dimensionUnit || 'cm'})
+                          </label>
+                          <input 
+                            type="number" 
+                            step="any"
+                            value={prod.widthCm || ''} 
+                            onChange={e => handleProductChange(idx, 'widthCm', e.target.value)} 
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" 
+                            placeholder="e.g. 80" 
+                          />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Height (cm)</label>
-                          <input type="number" value={prod.heightCm || ''} onChange={e => handleProductChange(idx, 'heightCm', e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" placeholder="e.g. 160" />
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            Height ({prod.dimensionUnit || 'cm'})
+                          </label>
+                          <input 
+                            type="number" 
+                            step="any"
+                            value={prod.heightCm || ''} 
+                            onChange={e => handleProductChange(idx, 'heightCm', e.target.value)} 
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs font-mono outline-none focus:border-amber-500" 
+                            placeholder="e.g. 160" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Dimension Unit</label>
+                          <select 
+                            value={prod.dimensionUnit || 'cm'}
+                            onChange={e => handleProductChange(idx, 'dimensionUnit', e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 text-xs font-semibold outline-none focus:border-amber-500"
+                          >
+                            {DIMENSION_UNITS.map(u => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.label})</option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Volumetric Wt</label>
                           <div className="bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5 text-sky-800 text-xs font-mono font-bold">
-                            {vol.tons > 0 ? `${vol.tons.toFixed(2)} tons (${vol.kg} kg)` : '0.00 tons'}
+                            {vol.tons > 0 ? `${vol.tons.toFixed(2)} tons` : '0.00 tons'}
                           </div>
                         </div>
                         <div>
@@ -538,62 +782,137 @@ export default function BusinessDashboard() {
               {/* Weight Totals Bar */}
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
                 <div>
-                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Gross Weight</span>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Gross Weight (Converted)</span>
                   <span className="text-slate-900 font-black text-sm">{grossWeight.toFixed(2)} Metric Tons</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Volumetric Weight (L×W×H/5000)</span>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] block">Volumetric Weight (IATA Standard)</span>
                   <span className="text-sky-700 font-black text-sm">{volumetricWeight.toFixed(2)} Metric Tons</span>
                 </div>
                 <div className="bg-white border-2 border-emerald-500 rounded-xl px-4 py-2 shadow-xs">
-                  <span className="text-emerald-700 font-bold uppercase text-[10px] block">Final Chargeable Weight</span>
+                  <span className="text-emerald-700 font-bold uppercase text-[10px] block">Chargeable Freight Weight</span>
                   <span className="text-emerald-800 font-black text-base">{chargeableWeight.toFixed(2)} Tons (max of Gross & Volumetric)</span>
                 </div>
               </div>
             </div>
 
             {/* Step 3: PICKUP DETAILS */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
+            <div className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-4 transition-all duration-300 hover:shadow-2xl">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">3</span>
-                {isUrdu ? 'روانگی کا مقام' : 'Pickup Details & Dispatch Point'}
+                <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-sm">3</span>
+                {isUrdu ? 'روانگی کا مقام' : 'Pickup Details & Logistics Hub'}
               </h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Street Address</label>
-                  <input required type="text" value={pickupDetails.streetAddress} onChange={e => setPickupDetails({...pickupDetails, streetAddress: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="Street / Industrial Zone" />
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Street Address / Factory Yard <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={pickupDetails.streetAddress} 
+                    onChange={e => setPickupDetails({...pickupDetails, streetAddress: e.target.value})} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                      formErrors.pickupAddress ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                    placeholder="Street / Industrial Estate / Warehouse No" 
+                  />
+                  {formErrors.pickupAddress && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors.pickupAddress}</p>
+                  )}
                 </div>
+
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">City</label>
-                  <input required type="text" value={pickupDetails.city} onChange={e => setPickupDetails({...pickupDetails, city: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="e.g. Lahore" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Province</label>
-                  <input required type="text" value={pickupDetails.province} onChange={e => setPickupDetails({...pickupDetails, province: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="e.g. Punjab" />
+                  <SearchSelect 
+                    label="Pickup City / Hub"
+                    options={PAKISTAN_CITIES}
+                    value={pickupDetails.city}
+                    onChange={(val, opt) => {
+                      setPickupDetails(prev => ({
+                        ...prev,
+                        city: val,
+                        province: opt?.province || prev.province
+                      }));
+                      if (formErrors.pickupCity) {
+                        setFormErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.pickupCity;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="Search pickup city..."
+                    error={formErrors.pickupCity}
+                    required
+                    isUrdu={isUrdu}
+                  />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Province</label>
+                  <input 
+                    type="text" 
+                    value={pickupDetails.province} 
+                    onChange={e => setPickupDetails({...pickupDetails, province: e.target.value})} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" 
+                    placeholder="e.g. Punjab / Sindh" 
+                  />
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Landmark</label>
-                  <input required type="text" value={pickupDetails.landmark} onChange={e => setPickupDetails({...pickupDetails, landmark: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="e.g. Near Main Chowk" />
+                  <input 
+                    type="text" 
+                    value={pickupDetails.landmark} 
+                    onChange={e => setPickupDetails({...pickupDetails, landmark: e.target.value})} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" 
+                    placeholder="e.g. Near Dry Port Toll Plaza" 
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Contact Person</label>
-                  <input required type="text" value={pickupDetails.contactPerson} onChange={e => setPickupDetails({...pickupDetails, contactPerson: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" placeholder="Full name" />
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Contact Person <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={pickupDetails.contactPerson} 
+                    onChange={e => setPickupDetails({...pickupDetails, contactPerson: e.target.value})} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                      formErrors.pickupContact ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                    placeholder="Full name of dispatch manager" 
+                  />
+                  {formErrors.pickupContact && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors.pickupContact}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Contact Phone</label>
-                  <input required type="text" value={pickupDetails.contactPhone} onChange={e => setPickupDetails({...pickupDetails, contactPhone: e.target.value})} className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-mono" placeholder="e.g. 0300-1234567" />
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Contact Mobile (03XX-XXXXXXX) <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={pickupDetails.contactPhone} 
+                    onChange={e => setPickupDetails({...pickupDetails, contactPhone: formatPhone(e.target.value)})} 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                      formErrors.pickupPhone ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
+                    placeholder="0300-1234567" 
+                  />
+                  {formErrors.pickupPhone && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors.pickupPhone}</p>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Step 4: RECIPIENTS / CONSIGNEES */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-4 shadow-md">
+            <div className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-4 transition-all duration-300 hover:shadow-2xl">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">4</span>
-                  {isUrdu ? 'وصول کنندگان' : 'Recipients / Consignees'}
+                  {isUrdu ? 'وصول کنندگان اور منزل' : 'Recipients / Consignee Destinations'}
                 </h3>
                 <button 
                   type="button"
@@ -619,37 +938,116 @@ export default function BusinessDashboard() {
                     <h5 className="text-xs font-bold text-red-900 border-b border-amber-200 pb-2 select-none flex items-center gap-2">
                       <TruckTaj className="text-amber-600 w-4 h-3" /> Consignee Destination {idx + 1}
                     </h5>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Full Name</label>
-                        <input required type="text" value={recip.fullName} onChange={e => handleRecipientChange(idx, 'fullName', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="Recipient name" />
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Consignee Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={recip.fullName} 
+                          onChange={e => handleRecipientChange(idx, 'fullName', e.target.value)} 
+                          className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                            formErrors[`recip_${idx}_name`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                          }`} 
+                          placeholder="Recipient or Company name" 
+                        />
+                        {formErrors[`recip_${idx}_name`] && (
+                          <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`recip_${idx}_name`]}</p>
+                        )}
                       </div>
+
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Phone</label>
-                        <input required type="text" value={recip.phone} onChange={e => handleRecipientChange(idx, 'phone', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" placeholder="0300-0000000" />
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Mobile Phone (03XX-XXXXXXX) <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={recip.phone} 
+                          onChange={e => handleRecipientChange(idx, 'phone', formatPhone(e.target.value))} 
+                          className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                            formErrors[`recip_${idx}_phone`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                          }`} 
+                          placeholder="0300-0000000" 
+                        />
+                        {formErrors[`recip_${idx}_phone`] && (
+                          <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`recip_${idx}_phone`]}</p>
+                        )}
                       </div>
+
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">City</label>
-                        <input required type="text" value={recip.city} onChange={e => handleRecipientChange(idx, 'city', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Karachi" />
+                        <SearchSelect 
+                          label="Destination City"
+                          options={PAKISTAN_CITIES}
+                          value={recip.city}
+                          onChange={(val, opt) => {
+                            const updated = [...recipients];
+                            updated[idx].city = val;
+                            if (opt?.province) updated[idx].province = opt.province;
+                            setRecipients(updated);
+                            if (formErrors[`recip_${idx}_city`]) {
+                              setFormErrors(prev => {
+                                const copy = { ...prev };
+                                delete copy[`recip_${idx}_city`];
+                                return copy;
+                              });
+                            }
+                          }}
+                          placeholder="Select destination..."
+                          error={formErrors[`recip_${idx}_city`]}
+                          required
+                          isUrdu={isUrdu}
+                        />
                       </div>
+
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Province</label>
-                        <input required type="text" value={recip.province} onChange={e => handleRecipientChange(idx, 'province', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Sindh" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Deadline Date</label>
-                        <input required type="date" value={recip.deadline} onChange={e => handleRecipientChange(idx, 'deadline', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500 font-mono" />
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Deadline Date <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="date" 
+                          value={recip.deadline} 
+                          onChange={e => handleRecipientChange(idx, 'deadline', e.target.value)} 
+                          className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none font-mono transition-colors ${
+                            formErrors[`recip_${idx}_deadline`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                          }`} 
+                        />
+                        {formErrors[`recip_${idx}_deadline`] && (
+                          <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`recip_${idx}_deadline`]}</p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Street Address</label>
-                        <input required type="text" value={recip.streetAddress} onChange={e => handleRecipientChange(idx, 'streetAddress', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="Street / Area / Warehouse" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Delivery Street Address / Warehouse <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={recip.streetAddress} 
+                          onChange={e => handleRecipientChange(idx, 'streetAddress', e.target.value)} 
+                          className={`w-full bg-white border rounded-xl px-3 py-2 text-slate-900 text-xs outline-none transition-colors ${
+                            formErrors[`recip_${idx}_address`] ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:border-amber-500'
+                          }`} 
+                          placeholder="Shop / Plot / Warehouse Number and Area" 
+                        />
+                        {formErrors[`recip_${idx}_address`] && (
+                          <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors[`recip_${idx}_address`]}</p>
+                        )}
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Assigned Products & Qty</label>
-                        <input required type="text" value={recip.assignedProducts} onChange={e => handleRecipientChange(idx, 'assignedProducts', e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" placeholder="e.g. Steel Coils x4" />
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Assigned Products & Packages
+                        </label>
+                        <input 
+                          type="text" 
+                          value={recip.assignedProducts} 
+                          onChange={e => handleRecipientChange(idx, 'assignedProducts', e.target.value)} 
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:border-amber-500" 
+                          placeholder="e.g. All Items / 20 Cartons" 
+                        />
                       </div>
                     </div>
                   </div>
@@ -657,10 +1055,10 @@ export default function BusinessDashboard() {
               </div>
             </div>
 
-            {/* Step 5: SPECIAL HANDLING, TAX ID, PAYMENT TERMS & LIVE TARIFF CALCULATOR */}
-            <div className="bg-white border-2 border-amber-200/90 rounded-3xl p-6 space-y-6 shadow-md">
+            {/* Step 5: SPECIAL HANDLING, TAX ID, RATE TYPE & LIVE TARIFF CALCULATOR */}
+            <div className="glass-card border border-white/60 shadow-xl rounded-3xl p-6 space-y-6 transition-all duration-300 hover:shadow-2xl">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">5</span>
+                <span className="w-6 h-6 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs shadow-sm">5</span>
                 {isUrdu ? 'خصوصی ہدایات، ٹیکس اور کرایہ کا تخمینہ' : 'Special Handling, NTN & Automated Fare Tariff'}
               </h3>
 
@@ -697,19 +1095,24 @@ export default function BusinessDashboard() {
                 </div>
               </div>
 
-              {/* NTN, Delivery Notes, Payment Terms, Vehicle Type Choice */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {/* NTN, Delivery Notes, Payment Terms, Vehicle Type Choice & Rate Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                    Sender NTN / Tax ID (Optional)
+                    Sender NTN / Tax ID (7-8 digits)
                   </label>
                   <input 
                     type="text" 
                     value={senderNTN} 
-                    onChange={e => setSenderNTN(e.target.value)} 
-                    placeholder="e.g. 1234567-8" 
-                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs font-mono outline-none focus:bg-white focus:border-amber-500" 
+                    onChange={e => setSenderNTN(formatNTN(e.target.value))} 
+                    placeholder="1234567-8" 
+                    className={`w-full bg-[#FAF7EE] border rounded-xl px-3 py-2 text-slate-900 text-xs font-mono outline-none transition-colors ${
+                      formErrors.senderNTN ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-300 focus:bg-white focus:border-amber-500'
+                    }`} 
                   />
+                  {formErrors.senderNTN && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium">{formErrors.senderNTN}</p>
+                  )}
                 </div>
 
                 <div>
@@ -736,24 +1139,38 @@ export default function BusinessDashboard() {
                     onChange={e => setVehicleTypeChoice(e.target.value)} 
                     className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500"
                   >
-                    <option value="18-Wheeler Trailer">18-Wheeler Trailer (1.25x)</option>
-                    <option value="22-Wheeler">22-Wheeler Heavy (1.30x)</option>
-                    <option value="Container (40ft)">Container 40ft (1.20x)</option>
-                    <option value="Full Body Truck">Full Body Truck (1.15x)</option>
-                    <option value="Half Body Truck">Half Body Truck (1.00x)</option>
-                    <option value="Mini Truck">Mini Truck (0.85x)</option>
+                    {VEHICLE_TYPES.map(vt => (
+                      <option key={vt.id} value={vt.name}>
+                        {vt.name} ({vt.capacityTons}t max)
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                    Gate / Delivery Instructions
+                    Rate / Tariff Pricing Model
+                  </label>
+                  <select 
+                    value={rateType} 
+                    onChange={e => setRateType(e.target.value)} 
+                    className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500 font-semibold text-amber-900"
+                  >
+                    {RATE_TYPES.map(rt => (
+                      <option key={rt.id} value={rt.id}>{rt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Gate / Bay Instructions
                   </label>
                   <input 
                     type="text" 
                     value={deliveryNotes} 
                     onChange={e => setDeliveryNotes(e.target.value)} 
-                    placeholder="e.g. Gate 4, Unload at Bay 2" 
+                    placeholder="e.g. Gate 4, Bay 2" 
                     className="w-full bg-[#FAF7EE] border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-xs outline-none focus:bg-white focus:border-amber-500" 
                   />
                 </div>
@@ -797,24 +1214,41 @@ export default function BusinessDashboard() {
                   <div className="bg-amber-950/40 p-3 rounded-xl border border-amber-500/50 flex flex-col justify-between">
                     <span className="text-[10px] text-amber-300 font-black uppercase tracking-wider">Total Tariff Estimate</span>
                     <span className="text-amber-400 font-black text-lg">{tariffQuote.formatted.total}</span>
-                    <span className="text-[9px] text-emerald-400 font-bold">{paymentTerms.toUpperCase()}</span>
+                    <span className="text-[9px] text-emerald-400 font-bold">{paymentTerms.toUpperCase()} &middot; {rateType.toUpperCase()}</span>
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Validation Error Summary if form submitted with errors */}
+            {formSubmitted && Object.keys(formErrors).length > 0 && (
+              <div className="bg-red-50 border-2 border-red-500 text-red-800 p-4 rounded-2xl flex items-start gap-3 shadow-lg">
+                <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={20} />
+                <div className="text-xs">
+                  <h5 className="font-bold text-sm text-red-900 mb-1">
+                    {isUrdu ? 'براہ کرم درج ذیل غلطیوں کو درست کریں:' : 'Please correct the highlighted errors before submitting:'}
+                  </h5>
+                  <ul className="list-disc list-inside space-y-0.5 font-medium text-red-700">
+                    {Object.values(formErrors).map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
             {/* Form actions */}
             <div className="flex gap-4">
               <button 
                 type="submit"
-                className="flex-1 btn-primary text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md"
+                className="flex-1 btn-primary text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center gap-2"
               >
                 <Send size={16} /> {isUrdu ? 'ٹرانسپورٹر کو بھیجیں' : 'Submit to Transporter'}
               </button>
               <button 
                 type="button"
                 onClick={(e) => handleRequestSubmit(e, 'Draft')}
-                className="flex-1 btn-outline text-slate-700 font-bold py-3.5 rounded-xl text-sm"
+                className="flex-1 btn-outline text-slate-700 font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2"
               >
                 <FileText size={16} /> Save as Draft
               </button>
@@ -835,7 +1269,7 @@ export default function BusinessDashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[450px]">
               {/* Left active cargo list */}
-              <div className="lg:col-span-5 bg-white border-2 border-amber-200/90 rounded-2xl p-4 overflow-y-auto max-h-[500px] space-y-3 shadow-md">
+              <div className="lg:col-span-5 glass-card border border-white/60 rounded-2xl p-4 overflow-y-auto max-h-[500px] space-y-3 shadow-xl">
                 {cargoList
                   .filter(c => c.status !== 'Completed')
                   .map(c => {
@@ -845,10 +1279,10 @@ export default function BusinessDashboard() {
                       <div
                         key={c._id}
                         onClick={() => setSelectedCargo(c)}
-                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer text-left relative overflow-hidden ${
+                        className={`p-4 rounded-xl border-2 transition-all duration-300 cursor-pointer text-left relative overflow-hidden glass-card-3d ${
                           isSelected
-                            ? 'bg-amber-50/80 border-amber-500 shadow-md'
-                            : 'bg-[#FAF7EE] border-amber-200/70 hover:border-amber-400'
+                            ? 'bg-amber-50/90 border-amber-500 shadow-lg -translate-y-0.5'
+                            : 'bg-[#FAF7EE]/80 border-amber-200/70 hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5'
                         }`}
                       >
                         {isSelected && (
@@ -901,7 +1335,7 @@ export default function BusinessDashboard() {
               </div>
 
               {/* Right shipment progress pane */}
-              <div className="lg:col-span-7 bg-white border-2 border-amber-200/90 rounded-2xl p-6 flex flex-col justify-between text-left shadow-md relative overflow-hidden">
+              <div className="lg:col-span-7 glass-card border border-white/60 rounded-2xl p-6 flex flex-col justify-between text-left shadow-xl relative overflow-hidden">
                 <SindhiTruckTexture />
                 {selectedCargo ? (
                   <div className="space-y-6 flex-1 flex flex-col justify-between relative z-10">
@@ -919,9 +1353,31 @@ export default function BusinessDashboard() {
                             {isUrdu ? 'منزل:' : 'Destination Hub:'} <span className="text-slate-900 font-bold">{selectedCargo.destination}</span>
                           </p>
                         </div>
-                        <span className="text-xs font-mono font-bold text-[#B91C1C] bg-red-50 px-3 py-1 rounded-lg border border-red-200">
-                          {selectedCargo.assignedTruck && selectedCargo.status !== 'Pending' ? `BLT-${selectedCargo.id}` : `SHP-${selectedCargo.id}`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-[#B91C1C] bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+                            {selectedCargo.assignedTruck && selectedCargo.status !== 'Pending' ? `BLT-${selectedCargo.id}` : `SHP-${selectedCargo.id}`}
+                          </span>
+                          {selectedCargo.assignedTruck && selectedCargo.status !== 'Pending' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const matched = bookings.find(b => (b.cargoId === selectedCargo._id || b.cargoId === selectedCargo.id)) || {
+                                  cargoId: selectedCargo.id,
+                                  cargoTitle: selectedCargo.title,
+                                  truckPlate: selectedCargo.assignedTruck,
+                                  transporterName: selectedCargo.transporterName,
+                                  price: selectedCargo.totalFare ? `PKR ${selectedCargo.totalFare.toLocaleString()}` : 'Agreed Rate',
+                                  cargo: selectedCargo
+                                };
+                                setBiltyModalBooking(matched);
+                              }}
+                              className="btn-primary text-xs !py-1.5 !px-3 flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 active:scale-95 transition-all"
+                            >
+                              <FileText size={13} />
+                              <span>{isUrdu ? 'بلٹی دیکھیں' : 'View e-Bilty'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Interactive MapViewer Displaying Assigned Truck Live Location, Route Polyline & Driver Telemetry */}
@@ -1097,7 +1553,7 @@ export default function BusinessDashboard() {
 
             <div className="space-y-4">
               {transporters.map(t => (
-                <div key={t._id} className="bg-white border-2 border-amber-200/90 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md hover:border-amber-400 transition-all relative overflow-hidden">
+                <div key={t._id} className="glass-card-3d border border-white/60 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
                   <SindhiTruckTexture />
                   <div className="flex items-start gap-4 relative z-10">
                     <div className="w-12 h-12 rounded-xl bg-red-100 border border-red-200 text-[#B91C1C] flex items-center justify-center shrink-0 shadow-sm">
@@ -1106,7 +1562,7 @@ export default function BusinessDashboard() {
                     <div>
                       <div className="flex items-center gap-2.5">
                         <h4 className="text-lg font-bold text-slate-900 tracking-wide">{t.name}</h4>
-                        <span className="text-xs text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded border border-amber-300 font-mono">
+                        <span className="text-xs text-amber-800 font-bold bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300 font-mono shadow-2xs">
                           {getTransporterRating(t.shipmentsCount || 0)}
                         </span>
                       </div>
@@ -1115,9 +1571,9 @@ export default function BusinessDashboard() {
                       </p>
                       
                       <div className="flex flex-wrap gap-1.5 mt-3 text-[10px] font-bold uppercase tracking-wide text-slate-600">
-                        <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Lahore</span>
-                        <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Karachi</span>
-                        <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Islamabad</span>
+                        <span className="bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded">Lahore</span>
+                        <span className="bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded">Karachi</span>
+                        <span className="bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded">Islamabad</span>
                       </div>
                     </div>
                   </div>
@@ -1131,7 +1587,7 @@ export default function BusinessDashboard() {
                         setSelectedTransporter(t);
                         setActiveTab('new-request');
                       }}
-                      className="btn-primary px-4 py-2 text-xs"
+                      className="btn-primary px-4 py-2 text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
                     >
                       Send Request
                     </button>
@@ -1139,7 +1595,7 @@ export default function BusinessDashboard() {
                 </div>
               ))}
               {transporters.length === 0 && (
-                <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-16 text-center text-slate-500 shadow-md">
+                <div className="glass-card border border-white/60 rounded-2xl p-16 text-center text-slate-500 shadow-xl">
                   No verified transporters listed.
                 </div>
               )}
@@ -1150,7 +1606,7 @@ export default function BusinessDashboard() {
         {/* HISTORY TAB */}
         {activeTab === 'history' && (
           <div className="space-y-6">
-            <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 text-left shadow-md relative overflow-hidden">
+            <div className="glass-card border border-white/60 rounded-2xl p-6 text-left shadow-xl relative overflow-hidden">
               <SindhiTruckTexture />
               <div className="flex justify-between items-center mb-6 relative z-10">
                 <h3 className="text-xs font-bold text-slate-700 tracking-wider uppercase">Delivery History</h3>
@@ -1212,6 +1668,12 @@ export default function BusinessDashboard() {
         )}
 
       </div>
+
+      {/* Official Bilty Preview & Print Modal */}
+      <BiltyModal 
+        booking={biltyModalBooking} 
+        onClose={() => setBiltyModalBooking(null)} 
+      />
 
     </div>
   );
