@@ -101,49 +101,49 @@ export default function BiltyModal({ booking, onClose }) {
         <ChamakRibbon height="h-[5px]" />
 
         {/* ── Modal Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-cyan-200 shrink-0 bg-gradient-to-r from-sky-50/90 via-purple-50/80 to-amber-50/80">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-sm overflow-hidden shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-cyan-200 shrink-0 bg-gradient-to-r from-sky-50/90 via-purple-50/80 to-amber-50/80">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-sm overflow-hidden shrink-0">
               <img src="/logo.jpg" alt="E-CARGO-BILTY" className="w-full h-full object-cover rounded-[14px]" />
             </div>
             <div className="text-left">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-black text-slate-900 leading-tight">
+                <h2 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
                   Official Digital Lorry Receipt
                 </h2>
-                <span className="font-urdu text-sm text-red-700 font-bold">رسید بلٹی</span>
+                <span className="font-urdu text-xs sm:text-sm text-red-700 font-bold">رسید بلٹی</span>
               </div>
-              <p className="text-[11px] text-slate-600 font-mono mt-0.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-600 font-mono mt-0.5">
                 BLT-{idStr.slice(0, 8).toUpperCase()} &nbsp;·&nbsp; {booking.cargoTitle}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
             {/* Print */}
             <button
               onClick={handlePrint}
               disabled={loading || !!error}
-              className="btn-outline text-xs !py-1.5 !px-3 cursor-pointer shadow-sm"
+              className="btn-outline text-xs !py-1.5 !px-2.5 sm:!px-3 cursor-pointer shadow-sm flex items-center gap-1"
             >
               <Printer size={14} />
-              Print
+              <span className="hidden sm:inline">Print</span>
             </button>
 
             {/* Download */}
             <button
               onClick={handleDownload}
               disabled={loading || !!error}
-              className="btn-primary text-xs !py-1.5 !px-3 cursor-pointer shadow-sm"
+              className="btn-primary text-xs !py-1.5 !px-2.5 sm:!px-3 cursor-pointer shadow-sm flex items-center gap-1"
             >
               <Download size={14} />
-              Download PDF
+              <span>Download<span className="hidden sm:inline"> PDF</span></span>
             </button>
 
             {/* Close */}
             <button
               onClick={onClose}
-              className="ml-2 w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-all cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-all cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -151,7 +151,7 @@ export default function BiltyModal({ booking, onClose }) {
         </div>
 
         {/* ── PDF Viewer Area ── */}
-        <div className="flex-1 relative bg-slate-100 overflow-hidden" style={{ minHeight: '520px' }}>
+        <div className="flex-1 relative bg-slate-100 overflow-hidden min-h-[360px] sm:min-h-[520px]">
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-500">
               <Loader2 className="animate-spin text-amber-600" size={32} />
@@ -172,16 +172,15 @@ export default function BiltyModal({ booking, onClose }) {
               ref={iframeRef}
               src={pdfUrl}
               title="Digital Bilty PDF"
-              className="w-full h-full border-0"
-              style={{ minHeight: '600px' }}
+              className="w-full h-full border-0 min-h-[380px] sm:min-h-[580px]"
             />
           )}
         </div>
 
         {/* ── Footer hint ── */}
-        <div className="px-6 py-2.5 border-t border-amber-200 bg-amber-50/70 flex items-center justify-between text-[11px] text-slate-600 shrink-0 font-mono">
-          <span>Official 100% Verified Consignment Note • jsPDF AutoTable Engine</span>
-          <span className="font-urdu text-emerald-800 font-bold text-sm">تصدیق شدہ لاری بلٹی • قانونی دستاویز</span>
+        <div className="px-4 sm:px-6 py-2 border-t border-amber-200 bg-amber-50/70 flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] text-slate-600 shrink-0 font-mono gap-1">
+          <span>Official 100% Verified Consignment Note • jsPDF Engine</span>
+          <span className="font-urdu text-emerald-800 font-bold text-xs sm:text-sm">تصدیق شدہ لاری بلٹی • قانونی دستاویز</span>
         </div>
       </div>
     </div>

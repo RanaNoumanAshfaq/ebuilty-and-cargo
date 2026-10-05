@@ -551,8 +551,8 @@ export default function TruckOwnerDashboard() {
       )}
 
       {/* Dashboard Tabs */}
-      <div className="border-b border-amber-200 mb-8 relative z-10">
-        <nav className="flex gap-8 overflow-x-auto pb-px">
+      <div className="border-b border-amber-200 mb-6 sm:mb-8 relative z-10 -mx-3 px-3 sm:mx-0 sm:px-0">
+        <nav className="flex gap-4 sm:gap-8 overflow-x-auto touch-scroll no-scrollbar pb-px">
           {[
             { id: 'fleet', name: 'Fleet Inventory' },
             { id: 'bookings', name: 'Active Bookings' },
@@ -939,8 +939,8 @@ export default function TruckOwnerDashboard() {
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto touch-scroll">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-amber-200 bg-amber-50/70">
                       <th className="p-3">Booking ID</th>

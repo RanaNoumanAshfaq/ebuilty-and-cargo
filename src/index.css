@@ -34,13 +34,22 @@
 }
 
 @layer base {
+  html {
+    max-width: 100%;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: #F0F9FF;
     color: #0F172A;
     font-family: var(--font-sans);
     margin: 0;
     min-height: 100vh;
+    max-width: 100%;
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body.lang-ur {
@@ -613,6 +622,38 @@ table tbody tr:hover {
   background: linear-gradient(90deg, rgba(240, 249, 255, 0.75) 0%, rgba(250, 245, 255, 0.6) 100%) !important;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+}
+
+/* ==========================================================================
+   MOBILE & RESPONSIVE TOUCH UTILITIES
+   ========================================================================== */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  .glass-card {
+    padding: 1rem !important;
+    border-radius: 1.25rem !important;
+  }
+  
+  .glass-card-3d {
+    padding: 1rem !important;
+    border-radius: 1.25rem !important;
+  }
 }
 
 

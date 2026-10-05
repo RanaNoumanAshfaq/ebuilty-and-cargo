@@ -477,8 +477,8 @@ export default function BusinessDashboard() {
       <ChamakRibbon height="h-[5px]" className="rounded-full mb-6 relative z-10" />
 
       {/* Tabs Navigation */}
-      <div className="border-b border-amber-200 mb-8 relative z-10">
-        <nav className="flex gap-8 overflow-x-auto pb-px">
+      <div className="border-b border-amber-200 mb-6 sm:mb-8 relative z-10 -mx-3 px-3 sm:mx-0 sm:px-0">
+        <nav className="flex gap-4 sm:gap-8 overflow-x-auto touch-scroll no-scrollbar pb-px">
           {[
             { id: 'new-request', name: 'New Request' },
             { id: 'track', name: 'Track Shipments' },
@@ -1613,8 +1613,8 @@ export default function BusinessDashboard() {
                 <span className="text-xs text-slate-600 font-mono">Total Completed: {cargoList.filter(c => c.status === 'Completed').length}</span>
               </div>
 
-              <div className="overflow-x-auto relative z-10">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto touch-scroll relative z-10">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b-2 border-amber-200 bg-amber-50/60">
                       <th className="py-3 px-3">Shipment ID</th>

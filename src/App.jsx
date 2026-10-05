@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { User, Bell, X, Shield, Truck, Briefcase, Building2, ArrowRight, Globe } from 'lucide-react';
+import { User, Bell, X, Shield, Truck, Briefcase, Building2, ArrowRight, Globe, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { logisticsAPI, socket } from './api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -20,6 +20,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchNotifications = async () => {
     if (!currentUser) return;
@@ -56,15 +57,16 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur-xl border-b border-cyan-200/80 shadow-xs transition-colors">
+    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-cyan-200/80 shadow-xs transition-colors">
       {/* Top Authentic Pakistani Truck Art Pattern Border */}
-      <TruckPatternBorder height="h-2.5 sm:h-3" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <TruckPatternBorder height="h-2 sm:h-2.5" />
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Brand Logo */}
           <div 
-            className="flex items-center gap-3 cursor-pointer" 
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none" 
             onClick={() => {
+              setMobileMenuOpen(false);
               if (currentUser && userData?.role) {
                 const target = 
                   userData.role === 'admin' ? '/admin/dashboard' :
@@ -77,28 +79,28 @@ const Navbar = () => {
               }
             }}
           >
-            <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-md group-hover:scale-105 transition-transform shrink-0">
-              <div className="w-full h-full bg-[#FFFDF7] rounded-[10px] flex items-center justify-center overflow-hidden">
+            <div className="relative flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-600 to-amber-500 p-0.5 shadow-md group-hover:scale-105 transition-transform shrink-0">
+              <div className="w-full h-full bg-[#FFFDF7] rounded-[9px] flex items-center justify-center overflow-hidden">
                 <img src="/logo.jpg" alt="E-CARGO-BILTY" className="w-full h-full object-cover" />
               </div>
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-lg font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-700 via-purple-700 to-rose-600">
+              <span className="text-sm sm:text-base md:text-lg font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-700 via-purple-700 to-rose-600">
                 {t('brandTitle')}
               </span>
-              <span className={`text-[10px] tracking-wider flex items-center gap-1.5 -mt-0.5 text-slate-500 ${isUrdu ? 'font-urdu font-bold text-purple-700' : 'font-mono'}`}>
+              <span className={`text-[8px] sm:text-[10px] tracking-wider flex items-center gap-1 -mt-0.5 text-slate-500 ${isUrdu ? 'font-urdu font-bold text-purple-700' : 'font-mono'}`}>
                 {t('brandSubtitle')}
               </span>
             </div>
           </div>
 
-          {/* Center Truck Art Peacock Badge */}
-          <div className="hidden md:flex items-center gap-2">
+          {/* Center Truck Art Peacock Badge - Hidden on small screens */}
+          <div className="hidden lg:flex items-center gap-2">
             <TruckMorBadge />
           </div>
 
-          {/* Right Navigation & User Controls */}
-          <div className="flex gap-2 sm:gap-3 items-center">
+          {/* Desktop Navigation & User Controls */}
+          <div className="hidden md:flex gap-2 sm:gap-3 items-center">
             {/* Language Change Toggle Button */}
             <button
               onClick={toggleLanguage}
@@ -161,7 +163,7 @@ const Navbar = () => {
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-100 to-purple-100 flex items-center justify-center text-purple-700 border border-cyan-300 shadow-xs">
                     <User size={15} />
                   </div>
-                  <div className="hidden md:flex flex-col text-left">
+                  <div className="flex flex-col text-left">
                     <span className="text-xs font-bold text-slate-800 truncate max-w-[130px]">
                       {userData?.name || currentUser.email}
                     </span>
@@ -186,7 +188,148 @@ const Navbar = () => {
               </div>
             )}
           </div>
+
+          {/* Mobile Right Controls: Language toggle + Bell + Hamburger */}
+          <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={toggleLanguage}
+              className="p-1.5 rounded-lg border border-cyan-300 bg-sky-50 text-cyan-800 text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+              title={language === 'en' ? 'Switch website to Urdu' : 'Switch website to English'}
+            >
+              <Globe size={14} className="text-cyan-700" />
+              <span className="text-[10px] font-mono">{language === 'en' ? 'اردو' : 'EN'}</span>
+            </button>
+
+            {currentUser && (
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 text-slate-600 hover:text-cyan-700 relative transition-colors rounded-lg hover:bg-sky-50 cursor-pointer"
+                title={t('transitAlerts')}
+              >
+                <Bell size={18} />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-rose-600 rounded-full border border-white shadow-xs animate-pulse"></span>
+                )}
+              </button>
+            )}
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl border-2 border-cyan-400 bg-sky-50 hover:bg-cyan-100 text-cyan-900 transition-all cursor-pointer shadow-xs"
+              aria-label="Toggle Navigation Menu"
+            >
+              {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Notifications Dropdown */}
+        {showNotifications && (
+          <div className="md:hidden pb-3">
+            <div className="bg-white/95 backdrop-blur-2xl border-2 border-cyan-300 rounded-2xl shadow-xl p-3 max-h-[300px] overflow-y-auto modal-enter text-left">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <TruckTaj size={16} />
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-purple-800">{t('transitAlerts')}</h4>
+                </div>
+                <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                  <X size={14} />
+                </button>
+              </div>
+              {notifications.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4 font-mono">{t('noNotifications')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {notifications.map(n => (
+                    <div key={n._id} className="p-2.5 rounded-xl bg-sky-50/70 border border-cyan-200 flex justify-between items-start gap-2">
+                      <div>
+                        <p className="text-xs text-slate-800 font-medium">{n.message}</p>
+                        <p className="text-[9px] font-mono text-cyan-700 mt-0.5">{new Date(n.createdAt).toLocaleTimeString()}</p>
+                      </div>
+                      <button onClick={() => clearNotification(n._id)} className="text-slate-400 hover:text-rose-600 p-0.5">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Collapsible Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-cyan-100 py-3.5 px-1 animate-dropdown-fade text-left space-y-2.5">
+            {currentUser ? (
+              <>
+                {/* User Info Card */}
+                <div className="p-3 rounded-2xl bg-gradient-to-r from-sky-50 to-purple-50 border border-cyan-200/90 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-white font-bold shadow-xs shrink-0">
+                      <User size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black text-slate-900 truncate">{userData?.name || currentUser.email}</p>
+                      <p className="text-[10px] font-mono text-purple-700 font-bold capitalize truncate">
+                        {t(`role_${userData?.role}`) || userData?.role?.replace('_', ' ') || 'User'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300 shrink-0 font-mono">
+                    Online
+                  </span>
+                </div>
+
+                {/* Dashboard Action Button */}
+                <Link
+                  to={`/${userData?.role === 'admin' ? 'admin' : userData?.role === 'truck_owner' ? 'truck-owner' : userData?.role === 'transporter' ? 'transporter' : 'business'}`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full btn-primary text-xs font-black !py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-md"
+                >
+                  <Truck size={15} /> {t('dashboard')} ({userData?.role?.toUpperCase() || 'PORTAL'})
+                </Link>
+
+                {/* Profile Link */}
+                <Link
+                  to="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-between transition-colors shadow-2xs"
+                >
+                  <span className="flex items-center gap-2"><User size={14} className="text-cyan-600" /> Account Profile &amp; KYC</span>
+                  <ArrowRight size={13} className="text-slate-400" />
+                </Link>
+
+                {/* Logout Button */}
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <X size={14} /> {t('logout')}
+                </button>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="btn-primary text-xs font-bold !py-2.5 rounded-xl text-center shadow-xs"
+                >
+                  {t('login')}
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="btn-outline text-xs font-bold !py-2.5 rounded-xl text-center"
+                >
+                  {t('register')}
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {/* Signature Peacock Chamak Patti Ribbon border along bottom edge */}
       <ChamakRibbon height="h-[3px]" />

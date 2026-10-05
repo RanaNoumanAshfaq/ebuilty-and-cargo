@@ -50,15 +50,17 @@ export default function SearchSelect({
       ? Math.min(estHeight, spaceAbove - 16)
       : Math.min(estHeight, spaceBelow - 16);
 
-    // Keep horizontally within viewport boundaries
-    const minWidth = Math.max(rect.width, 240);
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - minWidth - 8));
+    // Keep horizontally within viewport boundaries (guaranteed mobile safety)
+    const viewportWidth = window.innerWidth;
+    const targetWidth = Math.min(Math.max(rect.width, 220), viewportWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - targetWidth - 8));
 
     setDropdownStyle({
       position: 'fixed',
       top: `${top}px`,
       left: `${left}px`,
-      width: `${Math.max(rect.width, minWidth)}px`,
+      width: `${targetWidth}px`,
+      maxWidth: 'calc(100vw - 16px)',
       maxHeight: `${Math.max(120, maxHeight)}px`,
       zIndex: 99999,
     });

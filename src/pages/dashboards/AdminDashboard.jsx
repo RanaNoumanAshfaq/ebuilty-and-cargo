@@ -311,8 +311,8 @@ export default function AdminDashboard() {
       <ChamakRibbon height="h-[5px]" className="rounded-full mb-6 relative z-10" />
 
       {/* Navigation Tabs */}
-      <div className="border-b border-amber-200 mb-8 relative z-10">
-        <nav className="flex gap-8 overflow-x-auto pb-px">
+      <div className="border-b border-amber-200 mb-6 sm:mb-8 relative z-10 -mx-3 px-3 sm:mx-0 sm:px-0">
+        <nav className="flex gap-4 sm:gap-8 overflow-x-auto touch-scroll no-scrollbar pb-px">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -573,8 +573,8 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                <div className="overflow-x-auto touch-scroll">
+                  <table className="w-full min-w-[580px] text-left">
                     <thead>
                       <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b-2 border-amber-200 bg-amber-50/60">
                         <th className="py-3 px-3">Bilty ID</th>
@@ -842,8 +842,8 @@ export default function AdminDashboard() {
             {/* Users table */}
             <div className="bg-white border-2 border-amber-200/90 rounded-2xl p-6 shadow-md relative overflow-hidden">
               <SindhiTruckTexture />
-              <div className="overflow-x-auto relative z-10">
-                <table className="w-full text-left">
+              <div className="overflow-x-auto touch-scroll relative z-10">
+                <table className="w-full min-w-[720px] text-left">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b-2 border-amber-200 bg-amber-50/60">
                       <th className="py-3 px-3">User ID</th>
@@ -918,8 +918,8 @@ export default function AdminDashboard() {
                 <span className="text-xs font-mono text-slate-600">Total: {allShipments.length}</span>
               </div>
 
-              <div className="overflow-x-auto relative z-10">
-                <table className="w-full text-left">
+              <div className="overflow-x-auto touch-scroll relative z-10">
+                <table className="w-full min-w-[760px] text-left">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b-2 border-amber-200 bg-amber-50/60">
                       <th className="py-3 px-3">Shipment ID</th>

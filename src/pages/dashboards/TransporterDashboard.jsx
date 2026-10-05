@@ -324,8 +324,8 @@ export default function TransporterDashboard() {
       <ChamakRibbon height="h-[5px]" className="rounded-full mb-6 relative z-10" />
 
       {/* Tabs navigation */}
-      <div className="border-b border-amber-200 mb-8 relative z-10">
-        <nav className="flex gap-8 overflow-x-auto pb-px">
+      <div className="border-b border-amber-200 mb-6 sm:mb-8 relative z-10 -mx-3 px-3 sm:mx-0 sm:px-0">
+        <nav className="flex gap-4 sm:gap-8 overflow-x-auto touch-scroll no-scrollbar pb-px">
           {[
             { id: 'requests', name: isUrdu ? 'نئی کارگو درخواستیں' : 'Incoming Requests', badge: pendingRequests.length },
             { id: 'trucks', name: isUrdu ? 'دستیاب گاڑیاں' : 'Available Trucks' },
@@ -556,7 +556,7 @@ export default function TransporterDashboard() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                 <div>
                   <SearchSelect
                     label="From (Origin)"
@@ -906,8 +906,8 @@ export default function TransporterDashboard() {
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto touch-scroll">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
                     <tr className="text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-amber-200 bg-amber-50/70">
                       <th className="p-3">Shipment ID</th>
