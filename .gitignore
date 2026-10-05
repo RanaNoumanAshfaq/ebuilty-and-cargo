@@ -38,4 +38,12 @@ server/uploads/
 server/*.sqlite
 server/.wwebjs_auth/
 server/.wwebjs_cache/
-
+# Android Native
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/local.properties
+android/captures/
