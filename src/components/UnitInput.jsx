@@ -11,11 +11,14 @@ export default function UnitInput({
   label,
   value,
   unit,
+  selectedUnit,
   onValueChange,
+  onChange,
   onUnitChange,
   onBlur,
   unitCategory = 'weight', // 'weight' | 'dimension' | 'volume' | 'rate' | 'custom'
   customUnits = null,
+  units = null,
   error,
   touched,
   required = false,
@@ -26,8 +29,15 @@ export default function UnitInput({
   className = ''
 }) {
   const isInvalid = Boolean(touched && error);
+  const activeUnit = selectedUnit !== undefined ? selectedUnit : unit;
+
+  const handleValueChange = (val) => {
+    if (onValueChange) onValueChange(val);
+    if (onChange) onChange(val);
+  };
 
   const getUnits = () => {
+    if (units) return units;
     if (customUnits) return customUnits;
     switch (unitCategory) {
       case 'weight':
@@ -67,7 +77,7 @@ export default function UnitInput({
           step={step}
           min={min}
           value={value ?? ''}
-          onChange={(e) => onValueChange(e.target.value)}
+          onChange={(e) => handleValueChange(e.target.value)}
           onBlur={onBlur}
           placeholder={placeholder}
           className={`flex-1 py-2 px-3 text-xs sm:text-sm font-mono font-bold bg-transparent outline-none ${
@@ -77,8 +87,8 @@ export default function UnitInput({
 
         <div className="border-l border-slate-200 bg-slate-50 flex items-center">
           <select
-            value={unit}
-            onChange={(e) => onUnitChange(e.target.value)}
+            value={activeUnit}
+            onChange={(e) => onUnitChange && onUnitChange(e.target.value)}
             className="bg-transparent text-[11px] font-bold text-slate-700 px-2.5 py-2 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
           >
             {unitsList.map((u) => (

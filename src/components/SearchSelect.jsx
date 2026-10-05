@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check, X, AlertCircle } from 'lucide-react';
 
 /**
  * SearchSelect
- * Autocomplete combobox to minimize manual typing for cities, routes,
- * cargo classifications, and vehicle categories.
+ * High-performance autocomplete combobox with React Portal.
+ * Renders the popover menu directly into document.body to completely escape
+ * parent stacking contexts, backdrop-filters, and overflow:hidden clipping.
  */
 export default function SearchSelect({
   label,
@@ -23,20 +25,90 @@ export default function SearchSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const wrapperRef = useRef(null);
+  const triggerBoxRef = useRef(null);
+  const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Close dropdown on outside click
+  // Calculate dynamic fixed positioning relative to viewport
+  const updatePosition = () => {
+    if (!triggerBoxRef.current) return;
+    const rect = triggerBoxRef.current.getBoundingClientRect();
+    const estHeight = 260; // Max dropdown height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // Flip upwards if not enough space below and more space above
+    const openUp = spaceBelow < estHeight && spaceAbove > spaceBelow;
+
+    const top = openUp
+      ? Math.max(8, rect.top - Math.min(estHeight, spaceAbove - 12) - 4)
+      : rect.bottom + 4;
+
+    const maxHeight = openUp
+      ? Math.min(estHeight, spaceAbove - 16)
+      : Math.min(estHeight, spaceBelow - 16);
+
+    // Keep horizontally within viewport boundaries
+    const minWidth = Math.max(rect.width, 240);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - minWidth - 8));
+
+    setDropdownStyle({
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${Math.max(rect.width, minWidth)}px`,
+      maxHeight: `${Math.max(120, maxHeight)}px`,
+      zIndex: 99999,
+    });
+  };
+
+  // Reposition on scroll and resize
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      const onScrollOrResize = () => {
+        updatePosition();
+      };
+      // Use capture to catch scrolling inside modals and overflow containers
+      window.addEventListener('scroll', onScrollOrResize, true);
+      window.addEventListener('resize', onScrollOrResize);
+      return () => {
+        window.removeEventListener('scroll', onScrollOrResize, true);
+        window.removeEventListener('resize', onScrollOrResize);
+      };
+    }
+  }, [isOpen]);
+
+  // Close dropdown on outside click or Escape key
   useEffect(() => {
     function handleClickOutside(event) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+      if (
+        triggerBoxRef.current &&
+        !triggerBoxRef.current.contains(event.target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
         if (onBlur) onBlur();
       }
     }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+        triggerBoxRef.current?.focus();
+      }
+    }
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onBlur]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onBlur]);
 
   // Selected option display
   const selectedOption = options.find(
@@ -67,7 +139,7 @@ export default function SearchSelect({
   const isInvalid = Boolean(touched && error);
 
   return (
-    <div ref={wrapperRef} className={`space-y-1 text-left relative ${className}`}>
+    <div ref={wrapperRef} className={`space-y-1 text-left relative ${isOpen ? 'z-30' : 'z-10'} ${className}`}>
       {label && (
         <label className={`block text-[11px] font-extrabold uppercase tracking-wider ${
           isInvalid ? 'text-rose-600' : 'text-slate-700'
@@ -79,11 +151,16 @@ export default function SearchSelect({
 
       {/* Main Trigger Box */}
       <div 
+        ref={triggerBoxRef}
         onClick={() => {
-          setIsOpen(!isOpen);
-          if (!isOpen) setTimeout(() => inputRef.current?.focus(), 50);
+          const nextState = !isOpen;
+          setIsOpen(nextState);
+          if (nextState) {
+            updatePosition();
+            setTimeout(() => inputRef.current?.focus(), 50);
+          }
         }}
-        className={`w-full rounded-xl py-2 px-3 flex items-center justify-between gap-2 text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+        className={`w-full rounded-xl py-2 px-3 flex items-center justify-between gap-2 text-xs sm:text-sm font-medium transition-all cursor-pointer select-none ${
           isInvalid
             ? 'bg-rose-50/70 border-2 border-rose-500 text-rose-950 shadow-xs'
             : isOpen
@@ -117,7 +194,7 @@ export default function SearchSelect({
             <button 
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+              className="p-1 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
             >
               <X size={14} />
             </button>
@@ -150,26 +227,31 @@ export default function SearchSelect({
         </div>
       )}
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute z-[120] left-0 right-0 mt-1 bg-white/95 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-dropdown-fade max-h-64 flex flex-col">
+      {/* Floating Dropdown Menu via React Portal */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="bg-white/98 backdrop-blur-2xl border-2 border-cyan-400/90 rounded-2xl shadow-[0_25px_60px_-15px_rgba(2,132,199,0.35),0_15px_30px_rgba(15,23,42,0.22)] overflow-hidden animate-dropdown-fade flex flex-col pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Search Input Box */}
-          <div className="p-2 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2">
-            <Search size={14} className="text-slate-400 shrink-0 ml-1" />
+          <div className="p-2.5 border-b border-slate-100 bg-slate-50/80 flex items-center gap-2 shrink-0">
+            <Search size={14} className="text-cyan-600 shrink-0 ml-1" />
             <input
               ref={inputRef}
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Type to filter..."
-              className="w-full bg-transparent text-xs py-1 text-slate-800 placeholder-slate-400 outline-none"
+              className="w-full bg-transparent text-xs py-1 text-slate-800 placeholder-slate-400 outline-none font-medium"
               onClick={e => e.stopPropagation()}
             />
             {searchQuery && (
               <button 
                 type="button" 
                 onClick={() => setSearchQuery('')}
-                className="text-slate-400 hover:text-slate-600 p-0.5"
+                className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
               >
                 <X size={12} />
               </button>
@@ -177,7 +259,7 @@ export default function SearchSelect({
           </div>
 
           {/* Options List */}
-          <div className="overflow-y-auto max-h-48 divide-y divide-slate-100/80 p-1">
+          <div className="overflow-y-auto max-h-52 divide-y divide-slate-100/80 p-1.5 custom-scrollbar">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, i) => {
                 const optVal = opt.value || opt.id || opt.name || opt.label;
@@ -187,18 +269,18 @@ export default function SearchSelect({
                   <div
                     key={optVal || i}
                     onClick={() => handleSelect(opt)}
-                    className={`px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors ${
+                    className={`px-3 py-2.5 rounded-xl text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors ${
                       isSelected 
-                        ? 'bg-cyan-50 font-bold text-cyan-900 border border-cyan-200' 
-                        : 'hover:bg-slate-50 text-slate-700'
+                        ? 'bg-gradient-to-r from-cyan-50 to-purple-50 font-bold text-cyan-950 border border-cyan-300' 
+                        : 'hover:bg-sky-50/80 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
+                    <div className="flex items-center gap-2.5 truncate">
                       {opt.icon && <span className="text-base shrink-0">{opt.icon}</span>}
-                      <div>
-                        <p className="font-semibold text-slate-900 leading-tight">{opt.label || opt.name}</p>
+                      <div className="truncate">
+                        <p className="font-semibold text-slate-900 leading-tight truncate">{opt.label || opt.name}</p>
                         {(opt.subtext || opt.province || opt.hub) && (
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
                             {opt.province ? `${opt.province} • ` : ''}{opt.hub || opt.subtext}
                           </p>
                         )}
@@ -207,11 +289,11 @@ export default function SearchSelect({
 
                     <div className="flex items-center gap-2 shrink-0">
                       {opt.badge && (
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-bold">
                           {opt.badge}
                         </span>
                       )}
-                      {isSelected && <Check size={14} className="text-cyan-600 font-bold" />}
+                      {isSelected && <Check size={15} className="text-cyan-600 font-bold" />}
                     </div>
                   </div>
                 );
@@ -222,7 +304,8 @@ export default function SearchSelect({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Validation Error Message */}

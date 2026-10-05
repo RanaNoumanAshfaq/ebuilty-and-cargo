@@ -543,7 +543,7 @@ export default function TransporterDashboard() {
             </div>
 
             {/* Quick Inter-City Freight Tariff Estimator Bar */}
-            <div className="glass-card border-2 border-amber-300/80 rounded-3xl p-4 shadow-lg text-left">
+            <div className="glass-card border-2 border-amber-300/80 rounded-3xl p-4 shadow-lg text-left relative z-20">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <TruckTaj className="text-amber-600 w-4 h-3" />
