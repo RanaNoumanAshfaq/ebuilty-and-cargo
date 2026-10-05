@@ -645,14 +645,19 @@ export default function TruckOwnerDashboard() {
                             <MapPin size={13} className="text-red-600" /> Relocate Depot:
                           </span>
                           <select
-                            value={PAKISTAN_CITIES.find(c => c.toLowerCase() === (truck.loc || '').toLowerCase()) || truck.loc || 'Lahore'}
+                            value={PAKISTAN_CITIES.find(c => (c.name || '').toLowerCase() === (truck.loc || '').toLowerCase())?.name || truck.loc || 'Lahore'}
                             onChange={(e) => handleLocationUpdate(truck._id || truck.id, e.target.value)}
                             className="text-xs bg-[#FAF7EE] border border-amber-300 rounded-lg px-2.5 py-1 text-slate-800 font-semibold outline-none focus:border-red-600 focus:bg-white cursor-pointer shadow-xs"
                             title="Update truck real-time GPS terminal location"
                           >
-                            {PAKISTAN_CITIES.map(city => (
-                              <option key={city} value={city}>{city}</option>
-                            ))}
+                            {PAKISTAN_CITIES.map(c => {
+                              const cityName = typeof c === 'string' ? c : (c.name || c.id || c.label);
+                              return (
+                                <option key={cityName} value={cityName}>
+                                  {cityName} {c.province ? `(${c.province})` : ''}
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
 

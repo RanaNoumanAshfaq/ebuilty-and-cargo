@@ -152,7 +152,7 @@ export default function TransporterDashboard() {
   const openAssignModalForTruck = (truck) => {
     setSelectedTruckForAssign(truck);
     setSelectedCargoForAssign(null);
-    const orig = truck.loc ? (PAKISTAN_CITIES.find(c => c.toLowerCase() === truck.loc.toLowerCase()) || truck.loc) : 'Lahore';
+    const orig = truck.loc ? (PAKISTAN_CITIES.find(c => (c.name || '').toLowerCase() === truck.loc.toLowerCase())?.name || truck.loc) : 'Lahore';
     const dest = 'Karachi';
     const wt = parseFloat(truck.capacity) || 15;
     const vType = truck.truckType || 'Full Body Truck';
