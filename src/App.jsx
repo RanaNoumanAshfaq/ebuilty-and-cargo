@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import { User, Bell, X, Shield, Truck, Briefcase, Building2, ArrowRight, Globe, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { logisticsAPI, socket } from './api';
@@ -509,9 +510,49 @@ const Home = () => {
   );
 };
 
+/**
+ * AndroidBackButtonHandler
+ * Listens to Android hardware/gesture back button.
+ * If user is on a root/home/login screen ('/', '/login', '/register'), it exits the app.
+ * Otherwise, it navigates back in history.
+ */
+function AndroidBackButtonHandler() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    let handle;
+
+    const setupListener = async () => {
+      try {
+        handle = await CapApp.addListener('backButton', () => {
+          if (location.pathname === '/' || location.pathname === '/login') {
+            CapApp.exitApp();
+          } else {
+            window.history.back();
+          }
+        });
+      } catch (err) {
+        // Native Capacitor plugin unavailable in standard desktop browser
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      if (handle && typeof handle.remove === 'function') {
+        handle.remove();
+      }
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <Router>
+      <AndroidBackButtonHandler />
       <LanguageProvider>
         <AuthProvider>
           <div className="min-h-screen flex flex-col bg-[#F0F9FF] text-slate-900">

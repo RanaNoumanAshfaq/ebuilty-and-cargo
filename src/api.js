@@ -1,12 +1,24 @@
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const API_URL = 'http://localhost:5000/api';
-const socket = io('http://localhost:5000');
+const API_URL = 'http://192.168.18.93:5000/api';
+const socket = io('http://192.168.18.93:5000');
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error?.response?.status, error?.message, error?.config?.url);
+    return Promise.reject(error);
+  }
+);
 
 // Inject token into requests
 api.interceptors.request.use((config) => {

@@ -34,10 +34,16 @@
 }
 
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   html {
     max-width: 100%;
-    overflow-x: clip;
+    width: 100%;
+    overflow-x: hidden;
     -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
   }
 
   body {
@@ -45,11 +51,29 @@
     color: #0F172A;
     font-family: var(--font-sans);
     margin: 0;
+    padding: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     max-width: 100%;
-    overflow-x: clip;
+    width: 100%;
+    overflow-x: hidden;
+    position: relative;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   body.lang-ur {

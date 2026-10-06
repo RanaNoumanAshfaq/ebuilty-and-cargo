@@ -339,12 +339,12 @@ export default function Login() {
       const serverMsg = err.response?.data?.message;
       if (serverMsg) {
         setError(serverMsg);
-      } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError(isUrdu ? 'سرور سے رابطہ نہیں ہو سکا۔ برائے مہربانی چیک کریں کہ بیک اینڈ چل رہا ہے۔' : 'Cannot connect to server. Please ensure the backend is running on port 5000.');
+      } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error' || err.message?.includes('Network')) {
+        setError(isUrdu ? 'سرور (192.168.18.93:5000) سے رابطہ نہیں ہو سکا۔ برائے مہربانی چیک کریں کہ موبائل اسی وائی فائی پر ہے اور سرور چل رہا ہے۔' : 'Cannot reach backend at 192.168.18.93:5000. Please ensure your mobile device is on the same Wi-Fi.');
       } else {
-        setError(isUrdu ? 'لاگ ان نا کام رہا۔ برائے مہربانی اپنی معلومات چیک کریں۔' : 'Failed to sign in. Please check your credentials.');
+        setError(err.message || (isUrdu ? 'لاگ ان نا کام رہا۔ برائے مہربانی اپنی معلومات چیک کریں۔' : 'Failed to sign in. Please check your credentials.'));
       }
-      console.error(err);
+      console.error('Login failed:', err);
     } finally {
       setLoading(false);
     }

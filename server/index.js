@@ -21,7 +21,7 @@ const {
 
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // ─── File Upload Setup ─────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ app.patch('/api/auth/me', authMiddleware, async (req, res) => {
 
 app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-  const fileUrl = `http://localhost:${process.env.PORT || 5000}/uploads/${req.file.filename}`;
+  const fileUrl = `http://192.168.18.93:${process.env.PORT || 5000}/uploads/${req.file.filename}`;
   res.json({ url: fileUrl, filename: req.file.filename, originalname: req.file.originalname });
 });
 
@@ -918,8 +918,8 @@ sequelize.sync(isSqlite ? {} : { alter: true })
   .then(async () => {
     await ensureSqliteColumns();
     console.log(`✅ ${isSqlite ? 'SQLite' : 'MySQL'} Database synced`);
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT} (0.0.0.0)`);
     });
   })
   .catch(err => {
