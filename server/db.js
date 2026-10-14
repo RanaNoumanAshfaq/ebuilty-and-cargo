@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const dialect = process.env.DB_DIALECT || (process.env.DB_PASS || process.env.DB_HOST ? 'mysql' : 'sqlite');
 
@@ -33,3 +33,4 @@ if (dialect === 'sqlite') {
 }
 
 module.exports = sequelize;
+

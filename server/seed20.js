@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const sequelize = require('./db');
 const User = require('./models/User');
 const { Truck, Cargo, Booking, BookingMessage, Notification, Complaint } = require('./models/Logistics');
@@ -22,7 +24,7 @@ const USERS_DATA = [
     password: 'password123',
     role: 'business',
     status: 'active',
-    phone: '0321-5554321',
+    phone: '03145600028',
     cnic: '37405-1234567-1',
     businessName: 'Al-Rehman Enterprises',
     businessRegNumber: 'REG-PK-88421'
@@ -89,7 +91,7 @@ const USERS_DATA = [
     password: 'password123',
     role: 'transporter',
     status: 'active',
-    phone: '0300-8889999',
+    phone: '03145600028',
     cnic: '37405-2345678-2',
     businessName: 'Fast Track Logistics',
     businessRegNumber: 'FT-LOG-5421'
@@ -145,7 +147,7 @@ const USERS_DATA = [
     password: 'password123',
     role: 'truck_owner',
     status: 'active',
-    phone: '0301-7776655',
+    phone: '03145600028',
     cnic: '37405-3456789-3',
     businessName: 'Mehmood Fleet Services',
     businessRegNumber: 'MFS-0091'
@@ -212,7 +214,7 @@ const USERS_DATA = [
     password: 'password123',
     role: 'truck_owner',
     status: 'active',
-    phone: '0302-1239876',
+    phone: '03145600028',
     cnic: '37405-9988776-1',
     businessName: 'Rasheed Driver Services'
   },
@@ -342,7 +344,7 @@ async function seedCompleteSystem() {
           date: '2026-10-05'
         },
         recipients: [
-          { name: 'Apex Shipping Port Qasim Terminal', address: 'Berth 7, Port Qasim, Karachi', phone: '0300-1122334' }
+          { name: 'Apex Shipping Port Qasim Terminal', address: 'Berth 7, Port Qasim, Karachi', phone: '03145600028' }
         ]
       },
       {
