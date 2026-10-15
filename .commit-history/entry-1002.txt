@@ -1,0 +1,15 @@
+================================================================
+E-CARGO-BILTY HISTORICAL DEVELOPMENT ACTIVITY
+================================================================
+Commit Number: 1002 of 1002
+Day of Week:   Thursday
+Date & Time:   2026-10-15 21:38:48
+Module Scope:  CARGO - Cargo Logistics & Dispatch
+Commit Title:  cargo: [2026-10-15] Add delivery notes instructions for hazardous chemical transport
+
+CHANGES ON THIS DATE (Thursday, 2026-10-15):
+• Add delivery notes instructions for hazardous chemical transport
+• Component: src/cargo / server/modules/cargo
+• Verified against e-Cargo Bilty regulatory specifications.
+• Pushed to main branch at https://github.com/RanaNoumanAshfaq/ebuilty-and-cargo.git
+================================================================
